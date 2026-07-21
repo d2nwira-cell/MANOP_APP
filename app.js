@@ -16,6 +16,7 @@ tg.expand();
 var appState = {
   initData: tg.initData,
   masterBarang: [],
+  masterLokasi: [],
   fieldTambahan: [],
   items: [],
   kategoriLokasi: null
@@ -133,16 +134,31 @@ function mulai() {
 
       return apiGet('getMasterBarang').then(function (barang) {
         appState.masterBarang = barang;
+        return apiGet('getMasterLokasi');
+      }).then(function (lokasi) {
+        appState.masterLokasi = lokasi;
+        isiDropdownLokasi();
         return apiGet('getFieldTambahan', { initData: appState.initData, namaMenuBot: 'Pengajuan_Bahan_Baku' });
       }).then(function (field) {
         appState.fieldTambahan = field;
         renderFieldTambahan();
+        terapkanTampilanJenis();
         tambahItem(); // mulai dengan 1 baris item kosong
         document.getElementById('layarLoading').classList.add('hidden');
         document.getElementById('layarUtama').classList.remove('hidden');
       });
     })
     .catch(gagalMuat);
+}
+
+function isiDropdownLokasi() {
+  var select = document.getElementById('selectLokasiTujuan');
+  appState.masterLokasi.forEach(function (lok) {
+    var opt = document.createElement('option');
+    opt.value = lok.idLokasi;
+    opt.textContent = lok.namaLokasi;
+    select.appendChild(opt);
+  });
 }
 
 // ---------------------------------------------------------
@@ -155,8 +171,27 @@ document.getElementById('toggleJenis').addEventListener('click', function (e) {
   document.querySelectorAll('#toggleJenis button').forEach(function (b) { b.classList.remove('active'); });
   btn.classList.add('active');
   jenisTerpilih = btn.dataset.jenis;
-  document.getElementById('fieldRekening').style.display = jenisTerpilih === 'Budget' ? 'block' : 'none';
+  terapkanTampilanJenis();
+  renderDaftarItem();
 });
+
+/**
+ * Atur field mana yang tampil sesuai jenis pengajuan terpilih:
+ * - Bahan Baku: field tambahan (KPM) tampil (kalau kategori usaha cocok),
+ *   Keperluan & Rekening & harga/total item TIDAK tampil
+ * - Budget: kebalikannya -- Keperluan, Rekening, harga/total item tampil,
+ *   field tambahan (KPM) TIDAK tampil (Budget tidak terikat Config_Field_Tambahan)
+ */
+function terapkanTampilanJenis() {
+  var isiBudget = jenisTerpilih === 'Budget';
+
+  document.getElementById('fieldDeskripsi').classList.toggle('hidden', !isiBudget);
+  document.getElementById('fieldRekening').classList.toggle('hidden', !isiBudget);
+  document.getElementById('totalChip').classList.toggle('hidden', !isiBudget);
+
+  var areaFieldTambahan = document.getElementById('areaFieldTambahan');
+  areaFieldTambahan.classList.toggle('hidden', isiBudget);
+}
 
 // ---------------------------------------------------------
 // Field Tambahan (dinamis sesuai kategori usaha, mis. KPM)
@@ -200,49 +235,38 @@ function hapusItem(index) {
 function renderDaftarItem() {
   var kontainer = document.getElementById('daftarItem');
   kontainer.innerHTML = '';
+  var tampilkanHarga = jenisTerpilih === 'Budget';
 
   appState.items.forEach(function (item, index) {
     var card = document.createElement('div');
     card.className = 'item-card';
 
-    var opsiBarang = '<option value="">-- Barang custom --</option>' +
-      appState.masterBarang.map(function (b) {
-        return '<option value="' + b.idBarang + '"' + (item.idBarang === b.idBarang ? ' selected' : '') + '>' + b.namaBarang + '</option>';
-      }).join('');
+    var namaTampil = item.idBarang
+      ? (appState.masterBarang.filter(function (b) { return b.idBarang === item.idBarang; })[0] || {}).namaBarang || ''
+      : item.namaBarangKustom;
 
     card.innerHTML =
       '<div class="item-card-top"><span>Item ' + (index + 1) + '</span>' +
       '<button type="button" class="remove" data-hapus="' + index + '">Hapus</button></div>' +
-      '<div class="field"><select data-idx="' + index + '" data-key="idBarang">' + opsiBarang + '</select></div>' +
-      (item.idBarang === '' ? '<div class="field"><input type="text" placeholder="Nama barang" data-idx="' + index + '" data-key="namaBarangKustom" value="' + item.namaBarangKustom + '"></div>' : '') +
+      '<div class="field cari-barang-wrap">' +
+      '<input type="text" autocomplete="off" placeholder="Cari atau ketik nama barang..." class="input-cari-barang" data-idx="' + index + '" value="' + (namaTampil || '').replace(/"/g, '&quot;') + '">' +
+      '<div class="dropdown-barang hidden" data-idx="' + index + '"></div>' +
+      '</div>' +
       '<div class="item-row">' +
       '<input type="number" min="0" placeholder="Jumlah" data-idx="' + index + '" data-key="qty" value="' + item.qty + '">' +
       '<input type="text" placeholder="Satuan" data-idx="' + index + '" data-key="satuan" value="' + item.satuan + '">' +
       '</div>' +
-      '<div class="field"><input type="number" min="0" placeholder="Perkiraan harga satuan" data-idx="' + index + '" data-key="perkiraanHarga" value="' + item.perkiraanHarga + '"></div>';
+      (tampilkanHarga ? '<div class="field"><input type="number" min="0" placeholder="Perkiraan harga satuan" data-idx="' + index + '" data-key="perkiraanHarga" value="' + item.perkiraanHarga + '"></div>' : '');
 
     kontainer.appendChild(card);
   });
 
-  kontainer.querySelectorAll('[data-idx]').forEach(function (el) {
+  // Input teks lain (qty, satuan, harga) -- perubahan langsung disimpan ke state
+  kontainer.querySelectorAll('[data-key]').forEach(function (el) {
     el.addEventListener('input', function () {
       var idx = parseInt(el.dataset.idx, 10);
       var key = el.dataset.key;
-      var item = appState.items[idx];
-
-      if (key === 'idBarang') {
-        item.idBarang = el.value;
-        var barang = appState.masterBarang.filter(function (b) { return b.idBarang === el.value; })[0];
-        if (barang) {
-          item.satuan = barang.satuan;
-          item.perkiraanHarga = barang.hargaBarang;
-          item.namaBarangKustom = '';
-        }
-        renderDaftarItem();
-        return;
-      }
-
-      item[key] = (key === 'qty' || key === 'perkiraanHarga') ? (parseFloat(el.value) || 0) : el.value;
+      appState.items[idx][key] = (key === 'qty' || key === 'perkiraanHarga') ? (parseFloat(el.value) || 0) : el.value;
       hitungTotal();
     });
   });
@@ -251,7 +275,66 @@ function renderDaftarItem() {
     el.addEventListener('click', function () { hapusItem(parseInt(el.dataset.hapus, 10)); });
   });
 
+  // Input pencarian barang -- tampilkan daftar tersaring saat mengetik
+  kontainer.querySelectorAll('.input-cari-barang').forEach(function (inputEl) {
+    var idx = parseInt(inputEl.dataset.idx, 10);
+    var dropdownEl = kontainer.querySelector('.dropdown-barang[data-idx="' + idx + '"]');
+
+    inputEl.addEventListener('input', function () {
+      // Ketik bebas dianggap nama custom, sampai user memilih salah satu saran
+      appState.items[idx].idBarang = '';
+      appState.items[idx].namaBarangKustom = inputEl.value;
+      tampilkanSaranBarang(inputEl.value, dropdownEl, idx, inputEl);
+    });
+
+    inputEl.addEventListener('focus', function () {
+      tampilkanSaranBarang(inputEl.value, dropdownEl, idx, inputEl);
+    });
+
+    // Delay supaya klik pada saran sempat terdaftar sebelum dropdown ditutup
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
+    });
+  });
+
   hitungTotal();
+}
+
+function tampilkanSaranBarang(kataKunci, dropdownEl, idx, inputEl) {
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var hasil = kata
+    ? appState.masterBarang.filter(function (b) { return b.namaBarang.toLowerCase().indexOf(kata) !== -1; })
+    : appState.masterBarang;
+  hasil = hasil.slice(0, 20); // batasi supaya tidak terlalu panjang
+
+  if (hasil.length === 0) {
+    dropdownEl.innerHTML = '<div class="teks-kosong-dropdown">Tidak ditemukan -- akan disimpan sebagai barang custom</div>';
+  } else {
+    dropdownEl.innerHTML = hasil.map(function (b) {
+      return '<div class="opsi-barang" data-pilih-idbarang="' + b.idBarang + '">' + b.namaBarang + '</div>';
+    }).join('');
+  }
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-idbarang]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault(); // cegah blur duluan sebelum klik terdaftar
+      var idBarang = opsiEl.dataset.pilihIdbarang;
+      var barang = appState.masterBarang.filter(function (b) { return b.idBarang === idBarang; })[0];
+      if (!barang) return;
+
+      appState.items[idx].idBarang = barang.idBarang;
+      appState.items[idx].namaBarangKustom = '';
+      appState.items[idx].satuan = barang.satuan;
+      if (jenisTerpilih === 'Budget') {
+        appState.items[idx].perkiraanHarga = barang.hargaBarang;
+      }
+
+      inputEl.value = barang.namaBarang;
+      dropdownEl.classList.add('hidden');
+      renderDaftarItem(); // render ulang supaya satuan/harga ikut terisi
+    });
+  });
 }
 
 function hitungTotal() {
@@ -272,6 +355,19 @@ document.getElementById('btnKirim').addEventListener('click', function () {
   pesanStatus.textContent = '';
   pesanStatus.className = 'pesan-status';
 
+  var tanggalPemakaian = document.getElementById('inputTanggalPemakaian').value;
+  var idLokasiTujuan = document.getElementById('selectLokasiTujuan').value;
+
+  if (!tanggalPemakaian) {
+    pesanStatus.textContent = 'Tanggal pemakaian wajib diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+  if (!idLokasiTujuan) {
+    pesanStatus.textContent = 'Lokasi tujuan wajib dipilih.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
   if (appState.items.length === 0) {
     pesanStatus.textContent = 'Minimal 1 item harus diisi.';
     pesanStatus.className = 'pesan-status error';
@@ -279,12 +375,16 @@ document.getElementById('btnKirim').addEventListener('click', function () {
   }
 
   var fieldTambahan = {};
-  document.querySelectorAll('[data-field-tambahan]').forEach(function (el) {
-    fieldTambahan[el.dataset.fieldTambahan] = el.value;
-  });
+  if (jenisTerpilih === 'Bahan Baku') {
+    document.querySelectorAll('[data-field-tambahan]').forEach(function (el) {
+      fieldTambahan[el.dataset.fieldTambahan] = el.value;
+    });
+  }
 
   var formData = {
     jenisPengajuan: jenisTerpilih,
+    tanggalPemakaian: tanggalPemakaian,
+    idLokasiTujuan: idLokasiTujuan,
     deskripsiUmum: document.getElementById('inputDeskripsi').value,
     rekeningTujuan: document.getElementById('inputRekening').value,
     itemList: appState.items.map(function (item) {
@@ -295,7 +395,7 @@ document.getElementById('btnKirim').addEventListener('click', function () {
         namaBarangKustom: item.namaBarangKustom,
         qty: item.qty,
         satuan: item.satuan,
-        perkiraanHarga: item.perkiraanHarga
+        perkiraanHarga: jenisTerpilih === 'Budget' ? item.perkiraanHarga : 0
       };
     }),
     fieldTambahan: fieldTambahan
