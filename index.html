@@ -34,10 +34,20 @@
 
       <div class="section-label">Detail Pengajuan</div>
       <div class="field">
+        <label for="inputTanggalPemakaian">Tanggal Pemakaian</label>
+        <input type="date" id="inputTanggalPemakaian">
+      </div>
+      <div class="field">
+        <label for="selectLokasiTujuan">Lokasi Tujuan</label>
+        <select id="selectLokasiTujuan">
+          <option value="">-- Pilih lokasi --</option>
+        </select>
+      </div>
+      <div class="field hidden" id="fieldDeskripsi">
         <label for="inputDeskripsi">Keperluan</label>
         <textarea id="inputDeskripsi" placeholder="Contoh: Kebutuhan dapur minggu ke-3"></textarea>
       </div>
-      <div class="field" id="fieldRekening" style="display:none;">
+      <div class="field hidden" id="fieldRekening">
         <label for="inputRekening">Rekening Tujuan</label>
         <input type="text" id="inputRekening" placeholder="Nomor rekening & nama bank">
       </div>
@@ -48,7 +58,7 @@
       <div id="daftarItem"></div>
       <button type="button" class="btn-tambah-item" id="btnTambahItem">+ Tambah Item</button>
 
-      <div class="total-chip">
+      <div class="total-chip hidden" id="totalChip">
         <span class="label">Total Perkiraan</span>
         <span class="value" id="totalNilai">Rp0</span>
       </div>
