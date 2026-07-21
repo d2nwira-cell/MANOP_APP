@@ -252,3 +252,28 @@ footer.submit-bar button:disabled { opacity: 0.5; }
 .btn-setujui { background: #43a047; color: #fff; }
 .btn-tolak { background: #e53935; color: #fff; }
 .review-actions button:disabled { opacity: 0.5; }
+
+.cari-barang-wrap { position: relative; }
+.dropdown-barang {
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.dropdown-barang .opsi-barang {
+  padding: 10px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.dropdown-barang .opsi-barang:last-child { border-bottom: none; }
+.dropdown-barang .opsi-barang:active { background: var(--bg-secondary); }
+.dropdown-barang .teks-kosong-dropdown {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--hint);
+}
