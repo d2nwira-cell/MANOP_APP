@@ -51,6 +51,27 @@ function gagalMuat(err) {
   document.getElementById('layarLoading').innerHTML = '<p>Gagal memuat: ' + err.message + '</p>';
 }
 
+function tampilkanDiagnostik(pesanUtama) {
+  var info = {
+    pesan: pesanUtama,
+    adaObjekTelegram: !!window.Telegram,
+    adaWebApp: !!(window.Telegram && window.Telegram.WebApp),
+    platform: tg.platform || '(kosong)',
+    versionApp: tg.version || '(kosong)',
+    panjangInitData: (tg.initData || '').length,
+    initDataUnsafeAdaIsi: tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0,
+    adaDiDalamIframe: window.self !== window.top,
+    urlSaatIni: window.location.href,
+    panjangHashUrl: (window.location.hash || '').length,
+    apiBaseUrlTerpakai: API_BASE_URL
+  };
+  document.getElementById('layarLoading').innerHTML =
+    '<p style="font-weight:600; margin-bottom:10px;">' + pesanUtama + '</p>' +
+    '<pre style="text-align:left; font-size:11px; white-space:pre-wrap; background:var(--bg-secondary); padding:10px; border-radius:8px;">' +
+    JSON.stringify(info, null, 2) + '</pre>' +
+    '<p style="margin-top:10px;">Salin teks di atas dan kirim ke pengembang.</p>';
+}
+
 function mulai() {
   if (API_BASE_URL.indexOf('TEMPEL_URL') !== -1) {
     document.getElementById('layarLoading').innerHTML =
@@ -61,7 +82,7 @@ function mulai() {
   apiGet('getInfoUser', { initData: appState.initData })
     .then(function (hasil) {
       if (!hasil.sukses) {
-        document.getElementById('layarLoading').innerHTML = '<p>' + hasil.pesan + '</p>';
+        tampilkanDiagnostik(hasil.pesan);
         return;
       }
       appState.kategoriLokasi = hasil.kategoriLokasi;
