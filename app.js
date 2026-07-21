@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxwngHosrjU6OhB7CjhfxIDf2Fb4Z7YgVPthNXoBcwSb37SBdXqEenpNT7RyuA5_YjE5A/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyK4L3eg46_gUMCo7nkWvLEt7VmP-RBC74-iWqVbHhdHbuZ42zsDuna3oB5dEMn1kJVvg/exec';
 
 // =========================================================
 
@@ -124,7 +124,12 @@ function mulai() {
         return;
       }
       appState.kategoriLokasi = hasil.kategoriLokasi;
+      appState.role = hasil.role;
       document.getElementById('infoUser').textContent = hasil.nama + ' · ' + hasil.role;
+
+      if (hasil.role === 'Owner') {
+        document.getElementById('tabReview').classList.remove('hidden');
+      }
 
       return apiGet('getMasterBarang').then(function (barang) {
         appState.masterBarang = barang;
@@ -322,3 +327,129 @@ document.getElementById('btnKirim').addEventListener('click', function () {
 });
 
 mulai();
+
+// ---------------------------------------------------------
+// Tab Bar (Ajukan / Review)
+// ---------------------------------------------------------
+
+document.getElementById('tabBar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  var tab = btn.dataset.tab;
+
+  document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+
+  if (tab === 'ajukan') {
+    document.getElementById('viewAjukan').classList.remove('hidden');
+    document.getElementById('viewReview').classList.add('hidden');
+    document.getElementById('judulHalaman').textContent = 'Pengajuan Baru';
+  } else {
+    document.getElementById('viewAjukan').classList.add('hidden');
+    document.getElementById('viewReview').classList.remove('hidden');
+    document.getElementById('judulHalaman').textContent = 'Review Pengajuan';
+    muatDaftarReview();
+  }
+});
+
+// ---------------------------------------------------------
+// Review Pengajuan (khusus Owner)
+// ---------------------------------------------------------
+
+function formatRupiah(angka) {
+  return 'Rp' + (angka || 0).toLocaleString('id-ID');
+}
+
+function muatDaftarReview() {
+  var kontainer = document.getElementById('daftarReview');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat daftar pengajuan...</p>';
+
+  apiGet('getPengajuanPending', { initData: appState.initData })
+    .then(function (hasil) {
+      if (!hasil.sukses) {
+        kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+        return;
+      }
+
+      var badge = document.getElementById('badgeReview');
+      if (hasil.daftar.length > 0) {
+        badge.textContent = hasil.daftar.length;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      if (hasil.daftar.length === 0) {
+        kontainer.innerHTML = '<p class="teks-kosong">Tidak ada pengajuan yang menunggu review.</p>';
+        return;
+      }
+
+      kontainer.innerHTML = '';
+      hasil.daftar.forEach(function (p) {
+        var card = document.createElement('div');
+        card.className = 'review-card';
+
+        var daftarItemHtml = p.items.map(function (it) {
+          return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + ' (' + formatRupiah(it.perkiraanHarga) + '/unit)</li>';
+        }).join('');
+
+        card.innerHTML =
+          '<div class="review-top"><span class="review-nama">' + p.namaPemohon + '</span><span class="review-jenis">' + p.jenisPengajuan + '</span></div>' +
+          '<div class="review-deskripsi">' + (p.deskripsiUmum || '-') + '</div>' +
+          '<ul class="review-items">' + daftarItemHtml + '</ul>' +
+          '<div class="review-total">Total: ' + formatRupiah(p.totalNominal) + '</div>' +
+          '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
+          '<div class="review-actions">' +
+          '<button type="button" class="btn-tolak" data-id="' + p.idPengajuan + '" data-aksi="tolak">Tolak</button>' +
+          '<button type="button" class="btn-setujui" data-id="' + p.idPengajuan + '" data-aksi="setuju">Setujui</button>' +
+          '</div>';
+
+        kontainer.appendChild(card);
+      });
+
+      kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju');
+        });
+      });
+    })
+    .catch(function (err) {
+      kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+    });
+}
+
+function prosesKeputusan(btnDiklik, idPengajuan, disetujui) {
+  var card = btnDiklik.closest('.review-card');
+  var catatan = card.querySelector('.catatan-review').value;
+
+  if (!disetujui && !catatan) {
+    alert('Catatan wajib diisi kalau menolak pengajuan.');
+    return;
+  }
+
+  card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  btnDiklik.textContent = 'Memproses...';
+
+  apiGet('approveTolakPengajuan', {
+    initData: appState.initData,
+    idPengajuan: idPengajuan,
+    disetujui: disetujui,
+    catatan: catatan
+  }).then(function (hasil) {
+    if (!hasil.sukses) {
+      alert(hasil.pesan);
+      card.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+      btnDiklik.textContent = disetujui ? 'Setujui' : 'Tolak';
+      return;
+    }
+    card.style.opacity = '0.4';
+    card.innerHTML = '<p style="text-align:center; margin:0;">' + (disetujui ? '✅ Disetujui' : '🚫 Ditolak') + '</p>';
+    var badge = document.getElementById('badgeReview');
+    var sisa = parseInt(badge.textContent || '0', 10) - 1;
+    if (sisa > 0) { badge.textContent = sisa; } else { badge.classList.add('hidden'); }
+  }).catch(function (err) {
+    alert('Gagal memproses: ' + err.message);
+    card.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+    btnDiklik.textContent = disetujui ? 'Setujui' : 'Tolak';
+  });
+}
