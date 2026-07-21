@@ -24,23 +24,61 @@ var appState = {
 var jenisTerpilih = 'Bahan Baku';
 
 // ---------------------------------------------------------
-// Pemanggil API (fetch), pengganti google.script.run
+// Pemanggil API lewat JSONP (BUKAN fetch()) -- lihat catatan di Router.gs
+// soal kenapa fetch() tidak bisa diandalkan untuk Apps Script + GitHub Pages.
+// JSONP memuat data lewat tag <script>, kebal terhadap aturan CORS.
 // ---------------------------------------------------------
 
+var hitungJsonp = 0;
+
+function panggilApi(action, paramsTambahan) {
+  return new Promise(function (resolve, reject) {
+    hitungJsonp++;
+    var namaCallback = 'jsonpCallback_' + Date.now() + '_' + hitungJsonp;
+
+    var params = Object.assign({ action: action, callback: namaCallback }, paramsTambahan || {});
+    var query = new URLSearchParams(params);
+    var src = API_BASE_URL + '?' + query.toString();
+
+    var timeoutId = setTimeout(function () {
+      bersihkan();
+      reject(new Error('Waktu tunggu habis -- server tidak merespon.'));
+    }, 15000);
+
+    function bersihkan() {
+      clearTimeout(timeoutId);
+      delete window[namaCallback];
+      if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+    }
+
+    window[namaCallback] = function (data) {
+      bersihkan();
+      resolve(data);
+    };
+
+    var scriptEl = document.createElement('script');
+    scriptEl.src = src;
+    scriptEl.onerror = function () {
+      bersihkan();
+      reject(new Error('Gagal memuat data dari server (periksa koneksi internet).'));
+    };
+    document.body.appendChild(scriptEl);
+  });
+}
+
 function apiGet(action, paramsTambahan) {
-  var params = new URLSearchParams(Object.assign({ action: action }, paramsTambahan || {}));
-  return fetch(API_BASE_URL + '?' + params.toString())
-    .then(function (res) { return res.json(); });
+  return panggilApi(action, paramsTambahan);
 }
 
 function apiPost(action, dataTambahan) {
-  // PENTING: Content-Type text/plain (BUKAN application/json) supaya
-  // browser tidak melakukan CORS preflight -- lihat catatan di Router.gs.
-  return fetch(API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ action: action }, dataTambahan || {}))
-  }).then(function (res) { return res.json(); });
+  // "POST" di sini sebenarnya tetap lewat GET+JSONP (lihat Router.gs) --
+  // formData dikirim sebagai JSON string yang di-encode di parameter URL.
+  var params = {};
+  Object.keys(dataTambahan || {}).forEach(function (k) {
+    var v = dataTambahan[k];
+    params[k] = (typeof v === 'object') ? JSON.stringify(v) : v;
+  });
+  return panggilApi(action, params);
 }
 
 // ---------------------------------------------------------
