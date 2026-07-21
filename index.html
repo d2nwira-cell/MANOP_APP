@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sistem Operasional</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="layarLoading" class="layar-loading">
+    <p>Memuat data...</p>
+  </div>
+
+  <div id="layarUtama" class="hidden">
+    <header class="app-header">
+      <h1>Pengajuan Baru</h1>
+      <p id="infoUser">-</p>
+    </header>
+    <main>
+      <div class="section-label">Jenis Pengajuan</div>
+      <div class="toggle-group" id="toggleJenis">
+        <button type="button" class="active" data-jenis="Bahan Baku">Bahan Baku</button>
+        <button type="button" data-jenis="Budget">Budget</button>
+      </div>
+
+      <div class="section-label">Detail Pengajuan</div>
+      <div class="field">
+        <label for="inputDeskripsi">Keperluan</label>
+        <textarea id="inputDeskripsi" placeholder="Contoh: Kebutuhan dapur minggu ke-3"></textarea>
+      </div>
+      <div class="field" id="fieldRekening" style="display:none;">
+        <label for="inputRekening">Rekening Tujuan</label>
+        <input type="text" id="inputRekening" placeholder="Nomor rekening & nama bank">
+      </div>
+
+      <div id="areaFieldTambahan"></div>
+
+      <div class="section-label">Daftar Item</div>
+      <div id="daftarItem"></div>
+      <button type="button" class="btn-tambah-item" id="btnTambahItem">+ Tambah Item</button>
+
+      <div class="total-chip">
+        <span class="label">Total Perkiraan</span>
+        <span class="value" id="totalNilai">Rp0</span>
+      </div>
+    </main>
+
+    <footer class="submit-bar">
+      <button type="button" id="btnKirim">Kirim Pengajuan</button>
+      <div class="pesan-status" id="pesanStatus"></div>
+    </footer>
+  </div>
+
+  <div id="layarSukses" class="layar-sukses hidden">
+    <p style="font-size:40px; margin-bottom:8px;">✅</p>
+    <h2 style="margin:0 0 6px;">Pengajuan Terkirim</h2>
+    <p id="idPengajuanSukses">-</p>
+    <p style="margin-top:16px;">Owner akan meninjau pengajuan Anda. Anda akan mendapat notifikasi begitu ada keputusan.</p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
