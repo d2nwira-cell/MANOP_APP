@@ -163,3 +163,92 @@ footer.submit-bar button:disabled { opacity: 0.5; }
 }
 .layar-loading p, .layar-sukses p { color: var(--hint); font-size: 14px; }
 .hidden { display: none !important; }
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+}
+.tab-btn {
+  padding: 12px 4px;
+  margin-right: 20px;
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+}
+.tab-btn.active {
+  color: var(--link);
+  border-bottom-color: var(--link);
+}
+.badge {
+  display: inline-block;
+  background: #e53935;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+.teks-kosong {
+  color: var(--hint);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 16px;
+}
+.review-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.review-card .review-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.review-card .review-nama { font-weight: 700; font-size: 15px; }
+.review-card .review-jenis { font-size: 12px; color: var(--hint); }
+.review-card .review-deskripsi { font-size: 14px; margin: 6px 0; }
+.review-card .review-items {
+  font-size: 13px;
+  color: var(--hint);
+  margin: 8px 0;
+  padding-left: 16px;
+}
+.review-card .review-total {
+  font-weight: 700;
+  font-size: 15px;
+  margin: 8px 0;
+}
+.review-card textarea.catatan-review {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 8px;
+  min-height: 44px;
+}
+.review-actions {
+  display: flex;
+  gap: 8px;
+}
+.review-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+}
+.btn-setujui { background: #43a047; color: #fff; }
+.btn-tolak { background: #e53935; color: #fff; }
+.review-actions button:disabled { opacity: 0.5; }
