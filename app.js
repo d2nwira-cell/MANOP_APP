@@ -136,6 +136,9 @@ function mulai() {
         appState.masterBarang = barang;
         return apiGet('getMasterLokasi');
       }).then(function (lokasi) {
+        if (!Array.isArray(lokasi)) {
+          throw new Error('Server tidak mengembalikan daftar lokasi yang benar. Isi diterima: ' + JSON.stringify(lokasi));
+        }
         appState.masterLokasi = lokasi;
         isiDropdownLokasi();
         return apiGet('getFieldTambahan', { initData: appState.initData, namaMenuBot: 'Pengajuan_Bahan_Baku' });
