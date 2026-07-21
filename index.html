@@ -15,9 +15,16 @@
 
   <div id="layarUtama" class="hidden">
     <header class="app-header">
-      <h1>Pengajuan Baru</h1>
+      <h1 id="judulHalaman">Pengajuan Baru</h1>
       <p id="infoUser">-</p>
     </header>
+
+    <div class="tab-bar" id="tabBar">
+      <button type="button" class="tab-btn active" data-tab="ajukan">Ajukan</button>
+      <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
+    </div>
+
+    <div id="viewAjukan">
     <main>
       <div class="section-label">Jenis Pengajuan</div>
       <div class="toggle-group" id="toggleJenis">
@@ -51,6 +58,15 @@
       <button type="button" id="btnKirim">Kirim Pengajuan</button>
       <div class="pesan-status" id="pesanStatus"></div>
     </footer>
+    </div>
+
+    <div id="viewReview" class="hidden">
+      <main>
+        <div id="daftarReview">
+          <p class="teks-kosong">Memuat daftar pengajuan...</p>
+        </div>
+      </main>
+    </div>
   </div>
 
   <div id="layarSukses" class="layar-sukses hidden">
