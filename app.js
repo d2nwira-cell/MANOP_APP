@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyK4L3eg46_gUMCo7nkWvLEt7VmP-RBC74-iWqVbHhdHbuZ42zsDuna3oB5dEMn1kJVvg/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwngYU3XF7aBNkLel9es7qCwUygkN7cs-1vJMc9s6w4zpBxDsHNfzW-QFguLvCqndNo/exec';
 
 // =========================================================
 
