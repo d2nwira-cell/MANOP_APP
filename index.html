@@ -45,7 +45,7 @@
       </div>
       <div class="field hidden" id="fieldDeskripsi">
         <label for="inputDeskripsi">Keperluan</label>
-        <textarea id="inputDeskripsi" placeholder="Contoh: Kebutuhan dapur minggu ke-3"></textarea>
+        <textarea id="inputDeskripsi" placeholder="Jelaskan rincian kebutuhan budget di sini (barang/jasa apa saja, perkiraan jumlah, dsb)"></textarea>
       </div>
       <div class="field hidden" id="fieldRekening">
         <label for="inputRekening">Rekening Tujuan</label>
@@ -54,13 +54,15 @@
 
       <div id="areaFieldTambahan"></div>
 
-      <div class="section-label">Daftar Item</div>
-      <div id="daftarItem"></div>
-      <button type="button" class="btn-tambah-item" id="btnTambahItem">+ Tambah Item</button>
+      <div id="sectionDaftarItem">
+        <div class="section-label">Daftar Item</div>
+        <div id="daftarItem"></div>
+        <button type="button" class="btn-tambah-item" id="btnTambahItem">+ Tambah Item</button>
+      </div>
 
-      <div class="total-chip hidden" id="totalChip">
-        <span class="label">Total Perkiraan</span>
-        <span class="value" id="totalNilai">Rp0</span>
+      <div class="field hidden" id="fieldJumlahBudget">
+        <label for="inputJumlahBudget">Perkiraan Jumlah Budget (Rp)</label>
+        <input type="number" min="0" id="inputJumlahBudget" placeholder="Contoh: 500000">
       </div>
     </main>
 
