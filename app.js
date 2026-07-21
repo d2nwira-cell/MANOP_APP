@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwngYU3XF7aBNkLel9es7qCwUygkN7cs-1vJMc9s6w4zpBxDsHNfzW-QFguLvCqndNo/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxyX1NjfdYHhYNfiC4uVZ8SbBWVeF-PNUUBKVMEv1HzvQOKTYQEUKlDgR-0HUWJY54J7w/exec';
 
 // =========================================================
 
@@ -190,7 +190,8 @@ function terapkanTampilanJenis() {
 
   document.getElementById('fieldDeskripsi').classList.toggle('hidden', !isiBudget);
   document.getElementById('fieldRekening').classList.toggle('hidden', !isiBudget);
-  document.getElementById('totalChip').classList.toggle('hidden', !isiBudget);
+  document.getElementById('fieldJumlahBudget').classList.toggle('hidden', !isiBudget);
+  document.getElementById('sectionDaftarItem').classList.toggle('hidden', isiBudget);
 
   var areaFieldTambahan = document.getElementById('areaFieldTambahan');
   areaFieldTambahan.classList.toggle('hidden', isiBudget);
@@ -226,7 +227,7 @@ function renderFieldTambahan() {
 // ---------------------------------------------------------
 
 function tambahItem() {
-  appState.items.push({ idBarang: '', namaBarangKustom: '', qty: 1, satuan: '', perkiraanHarga: 0 });
+  appState.items.push({ idBarang: '', namaBarangKustom: '', qty: 1, satuan: '' });
   renderDaftarItem();
 }
 
@@ -238,7 +239,6 @@ function hapusItem(index) {
 function renderDaftarItem() {
   var kontainer = document.getElementById('daftarItem');
   kontainer.innerHTML = '';
-  var tampilkanHarga = jenisTerpilih === 'Budget';
 
   appState.items.forEach(function (item, index) {
     var card = document.createElement('div');
@@ -258,19 +258,17 @@ function renderDaftarItem() {
       '<div class="item-row">' +
       '<input type="number" min="0" placeholder="Jumlah" data-idx="' + index + '" data-key="qty" value="' + item.qty + '">' +
       '<input type="text" placeholder="Satuan" data-idx="' + index + '" data-key="satuan" value="' + item.satuan + '">' +
-      '</div>' +
-      (tampilkanHarga ? '<div class="field"><input type="number" min="0" placeholder="Perkiraan harga satuan" data-idx="' + index + '" data-key="perkiraanHarga" value="' + item.perkiraanHarga + '"></div>' : '');
+      '</div>';
 
     kontainer.appendChild(card);
   });
 
-  // Input teks lain (qty, satuan, harga) -- perubahan langsung disimpan ke state
+  // Input qty & satuan -- perubahan langsung disimpan ke state
   kontainer.querySelectorAll('[data-key]').forEach(function (el) {
     el.addEventListener('input', function () {
       var idx = parseInt(el.dataset.idx, 10);
       var key = el.dataset.key;
-      appState.items[idx][key] = (key === 'qty' || key === 'perkiraanHarga') ? (parseFloat(el.value) || 0) : el.value;
-      hitungTotal();
+      appState.items[idx][key] = (key === 'qty') ? (parseFloat(el.value) || 0) : el.value;
     });
   });
 
@@ -299,8 +297,6 @@ function renderDaftarItem() {
       setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
     });
   });
-
-  hitungTotal();
 }
 
 function tampilkanSaranBarang(kataKunci, dropdownEl, idx, inputEl) {
@@ -329,22 +325,12 @@ function tampilkanSaranBarang(kataKunci, dropdownEl, idx, inputEl) {
       appState.items[idx].idBarang = barang.idBarang;
       appState.items[idx].namaBarangKustom = '';
       appState.items[idx].satuan = barang.satuan;
-      if (jenisTerpilih === 'Budget') {
-        appState.items[idx].perkiraanHarga = barang.hargaBarang;
-      }
 
       inputEl.value = barang.namaBarang;
       dropdownEl.classList.add('hidden');
-      renderDaftarItem(); // render ulang supaya satuan/harga ikut terisi
+      renderDaftarItem(); // render ulang supaya satuan ikut terisi
     });
   });
-}
-
-function hitungTotal() {
-  var total = appState.items.reduce(function (sum, item) {
-    return sum + (item.qty || 0) * (item.perkiraanHarga || 0);
-  }, 0);
-  document.getElementById('totalNilai').textContent = 'Rp' + total.toLocaleString('id-ID');
 }
 
 document.getElementById('btnTambahItem').addEventListener('click', tambahItem);
@@ -360,6 +346,7 @@ document.getElementById('btnKirim').addEventListener('click', function () {
 
   var tanggalPemakaian = document.getElementById('inputTanggalPemakaian').value;
   var idLokasiTujuan = document.getElementById('selectLokasiTujuan').value;
+  var isiBudget = jenisTerpilih === 'Budget';
 
   if (!tanggalPemakaian) {
     pesanStatus.textContent = 'Tanggal pemakaian wajib diisi.';
@@ -371,14 +358,28 @@ document.getElementById('btnKirim').addEventListener('click', function () {
     pesanStatus.className = 'pesan-status error';
     return;
   }
-  if (appState.items.length === 0) {
+
+  var jumlahBudget = parseFloat(document.getElementById('inputJumlahBudget').value) || 0;
+
+  if (isiBudget) {
+    if (!document.getElementById('inputDeskripsi').value) {
+      pesanStatus.textContent = 'Rincian kebutuhan wajib diisi.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    if (jumlahBudget <= 0) {
+      pesanStatus.textContent = 'Perkiraan jumlah budget wajib diisi.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+  } else if (appState.items.length === 0) {
     pesanStatus.textContent = 'Minimal 1 item harus diisi.';
     pesanStatus.className = 'pesan-status error';
     return;
   }
 
   var fieldTambahan = {};
-  if (jenisTerpilih === 'Bahan Baku') {
+  if (!isiBudget) {
     document.querySelectorAll('[data-field-tambahan]').forEach(function (el) {
       fieldTambahan[el.dataset.fieldTambahan] = el.value;
     });
@@ -390,18 +391,18 @@ document.getElementById('btnKirim').addEventListener('click', function () {
     idLokasiTujuan: idLokasiTujuan,
     deskripsiUmum: document.getElementById('inputDeskripsi').value,
     rekeningTujuan: document.getElementById('inputRekening').value,
-    itemList: appState.items.map(function (item) {
+    itemList: isiBudget ? [] : appState.items.map(function (item) {
       var barang = appState.masterBarang.filter(function (b) { return b.idBarang === item.idBarang; })[0];
       return {
         idBarang: item.idBarang,
         namaBarangDatabase: barang ? barang.namaBarang : '',
         namaBarangKustom: item.namaBarangKustom,
         qty: item.qty,
-        satuan: item.satuan,
-        perkiraanHarga: jenisTerpilih === 'Budget' ? item.perkiraanHarga : 0
+        satuan: item.satuan
       };
     }),
-    fieldTambahan: fieldTambahan
+    fieldTambahan: fieldTambahan,
+    totalNominalManual: isiBudget ? jumlahBudget : 0
   };
 
   var btn = document.getElementById('btnKirim');
@@ -493,14 +494,14 @@ function muatDaftarReview() {
         card.className = 'review-card';
 
         var daftarItemHtml = p.items.map(function (it) {
-          return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + ' (' + formatRupiah(it.perkiraanHarga) + '/unit)</li>';
+          return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</li>';
         }).join('');
 
         card.innerHTML =
           '<div class="review-top"><span class="review-nama">' + p.namaPemohon + '</span><span class="review-jenis">' + p.jenisPengajuan + '</span></div>' +
           '<div class="review-deskripsi">' + (p.deskripsiUmum || '-') + '</div>' +
-          '<ul class="review-items">' + daftarItemHtml + '</ul>' +
-          '<div class="review-total">Total: ' + formatRupiah(p.totalNominal) + '</div>' +
+          (daftarItemHtml ? '<ul class="review-items">' + daftarItemHtml + '</ul>' : '') +
+          (p.totalNominal > 0 ? '<div class="review-total">Perkiraan Budget: ' + formatRupiah(p.totalNominal) + '</div>' : '') +
           '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
           '<div class="review-actions">' +
           '<button type="button" class="btn-tolak" data-id="' + p.idPengajuan + '" data-aksi="tolak">Tolak</button>' +
