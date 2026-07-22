@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzS6YbzFWVSvZq-KzMTI-NrV12FFwJ35d2w0TJbKjcCjyQE7BW27osDlvhk8STNHDJ6vQ/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycby5DwXNqE-Otg2IW5zRjpnaU2CIHBYfb4i9GTMQHKmlDYvD2gNCaMxnzWg4mNDiZqlomQ/exec';
 
 // =========================================================
 
@@ -566,7 +566,7 @@ function muatDaftarReviewPenerimaan() {
         }).join('');
 
         card.innerHTML =
-          '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">Pengajuan ' + p.idPengajuanTerkait + '</span></div>' +
+          '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">' + (p.idPengajuanTerkait ? 'Pengajuan ' + p.idPengajuanTerkait : 'Kiriman Langsung') + '</span></div>' +
           '<ul class="review-items">' + daftarItemHtml + '</ul>' +
           '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
           '<div class="review-actions">' +
@@ -651,35 +651,64 @@ function muatPengajuanUntukPenerimaan() {
 }
 
 document.getElementById('selectPengajuanPenerimaan').addEventListener('change', function () {
-  var idPengajuan = this.value;
+  var pilihan = this.value;
   var submitBar = document.getElementById('submitBarPenerimaan');
+  var btnTambah = document.getElementById('btnTambahItemPenerimaan');
 
-  if (!idPengajuan) {
+  if (!pilihan) {
+    itemsPenerimaan = [];
     document.getElementById('daftarItemPenerimaan').innerHTML = '';
     submitBar.classList.add('hidden');
+    btnTambah.classList.add('hidden');
     return;
   }
 
-  var pengajuan = appState.daftarPengajuanPenerimaan.filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
-  if (!pengajuan) return;
+  if (pilihan === '_TANPA_') {
+    // Kiriman langsung tanpa pengajuan -- mulai dengan daftar kosong,
+    // user tambah item manual satu-satu lewat tombol "+ Tambah Item Lain"
+    itemsPenerimaan = [];
+  } else {
+    var pengajuan = appState.daftarPengajuanPenerimaan.filter(function (p) { return p.idPengajuan === pilihan; })[0];
+    if (!pengajuan) return;
 
-  itemsPenerimaan = pengajuan.items.map(function (it) {
-    return {
-      idBarang: it.idBarang,
-      namaBarang: it.namaBarang,
-      qtyDiajukan: it.qtyDiajukan,
-      satuan: it.satuan,
-      qtyDiterima: it.qtyDiajukan,
-      kondisi: 'Baik',
-      fotoBase64: null,
-      fotoMime: null,
-      urlFoto: null,
-      statusUpload: null
-    };
-  });
+    itemsPenerimaan = pengajuan.items.map(function (it) {
+      return {
+        asal: 'pengajuan',
+        idBarang: it.idBarang,
+        namaBarang: it.namaBarang,
+        qtyDiajukan: it.qtyDiajukan,
+        satuan: it.satuan,
+        qtyDiterima: it.qtyDiajukan,
+        kondisi: 'Baik',
+        fotoBase64: null,
+        fotoMime: null,
+        urlFoto: null,
+        statusUpload: null
+      };
+    });
+  }
 
   renderItemPenerimaan();
   submitBar.classList.remove('hidden');
+  btnTambah.classList.remove('hidden');
+});
+
+document.getElementById('btnTambahItemPenerimaan').addEventListener('click', function () {
+  itemsPenerimaan.push({
+    asal: 'manual',
+    idBarang: '',
+    namaBarang: '',
+    namaBarangKustom: '',
+    qtyDiajukan: null,
+    satuan: '',
+    qtyDiterima: 1,
+    kondisi: 'Baik',
+    fotoBase64: null,
+    fotoMime: null,
+    urlFoto: null,
+    statusUpload: null
+  });
+  renderItemPenerimaan();
 });
 
 function renderItemPenerimaan() {
@@ -690,16 +719,24 @@ function renderItemPenerimaan() {
     var card = document.createElement('div');
     card.className = 'item-card';
 
-    card.innerHTML =
-      '<div class="item-card-top"><span>' + item.namaBarang + ' <span class="ref-qty">(diajukan: ' + item.qtyDiajukan + ' ' + item.satuan + ')</span></span></div>' +
+    var bagianAtas = item.asal === 'manual'
+      ? '<div class="item-card-top"><span>Item Tambahan</span><button type="button" class="remove" data-hapus-item="' + index + '">Hapus</button></div>' +
+        '<div class="field cari-barang-wrap">' +
+        '<input type="text" autocomplete="off" placeholder="Cari atau ketik nama barang..." class="input-cari-barang-terima" data-idx="' + index + '" value="' + (item.namaBarang || item.namaBarangKustom || '').replace(/"/g, '&quot;') + '">' +
+        '<div class="dropdown-barang hidden" data-idx-terima="' + index + '"></div>' +
+        '</div>'
+      : '<div class="item-card-top"><span>' + item.namaBarang + ' <span class="ref-qty">(diajukan: ' + item.qtyDiajukan + ' ' + item.satuan + ')</span></span></div>';
+
+    card.innerHTML = bagianAtas +
       '<div class="item-row">' +
       '<input type="number" min="0" placeholder="Qty diterima" data-idx="' + index + '" data-key="qtyDiterima" value="' + item.qtyDiterima + '">' +
-      '<select data-idx="' + index + '" data-key="kondisi">' +
+      '<input type="text" placeholder="Satuan" data-idx="' + index + '" data-key="satuan" value="' + item.satuan + '"' + (item.asal !== 'manual' ? ' readonly' : '') + '>' +
+      '</div>' +
+      '<div class="field"><select data-idx="' + index + '" data-key="kondisi">' +
       '<option value="Baik"' + (item.kondisi === 'Baik' ? ' selected' : '') + '>Baik</option>' +
       '<option value="Rusak"' + (item.kondisi === 'Rusak' ? ' selected' : '') + '>Rusak</option>' +
       '<option value="Kurang"' + (item.kondisi === 'Kurang' ? ' selected' : '') + '>Kurang</option>' +
-      '</select>' +
-      '</div>' +
+      '</select></div>' +
       (item.urlFoto ? '<img src="' + item.urlFoto + '" class="preview-foto">' : (item.fotoBase64 ? '<img src="data:' + item.fotoMime + ';base64,' + item.fotoBase64 + '" class="preview-foto">' : '')) +
       '<button type="button" class="btn-ambil-foto" data-idx="' + index + '">📷 ' + (item.fotoBase64 || item.urlFoto ? 'Ganti Foto' : 'Ambil Foto') + '</button>' +
       '<input type="file" accept="image/*" capture="environment" class="hidden input-file-foto" data-idx="' + index + '">' +
@@ -713,6 +750,32 @@ function renderItemPenerimaan() {
       var idx = parseInt(el.dataset.idx, 10);
       var key = el.dataset.key;
       itemsPenerimaan[idx][key] = key === 'qtyDiterima' ? (parseFloat(el.value) || 0) : el.value;
+    });
+  });
+
+  kontainer.querySelectorAll('[data-hapus-item]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      itemsPenerimaan.splice(parseInt(el.dataset.hapusItem, 10), 1);
+      renderItemPenerimaan();
+    });
+  });
+
+  // Pencarian barang untuk item manual -- pola sama seperti form Pengajuan
+  kontainer.querySelectorAll('.input-cari-barang-terima').forEach(function (inputEl) {
+    var idx = parseInt(inputEl.dataset.idx, 10);
+    var dropdownEl = kontainer.querySelector('.dropdown-barang[data-idx-terima="' + idx + '"]');
+
+    inputEl.addEventListener('input', function () {
+      itemsPenerimaan[idx].idBarang = '';
+      itemsPenerimaan[idx].namaBarangKustom = inputEl.value;
+      itemsPenerimaan[idx].namaBarang = inputEl.value;
+      tampilkanSaranBarangTerima(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('focus', function () {
+      tampilkanSaranBarangTerima(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
     });
   });
 
@@ -742,6 +805,34 @@ function renderItemPenerimaan() {
         itemsPenerimaan[idx].statusUpload = { tipe: 'error', teks: 'Gagal memproses foto: ' + err.message };
         renderItemPenerimaan();
       });
+    });
+  });
+}
+
+function tampilkanSaranBarangTerima(kataKunci, dropdownEl, idx, inputEl) {
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var hasil = kata
+    ? appState.masterBarang.filter(function (b) { return b.namaBarang.toLowerCase().indexOf(kata) !== -1; })
+    : appState.masterBarang;
+  hasil = hasil.slice(0, 20);
+
+  dropdownEl.innerHTML = hasil.length === 0
+    ? '<div class="teks-kosong-dropdown">Tidak ditemukan -- akan disimpan sebagai barang custom</div>'
+    : hasil.map(function (b) { return '<div class="opsi-barang" data-pilih-idbarang="' + b.idBarang + '">' + b.namaBarang + '</div>'; }).join('');
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-idbarang]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var barang = appState.masterBarang.filter(function (b) { return b.idBarang === opsiEl.dataset.pilihIdbarang; })[0];
+      if (!barang) return;
+      itemsPenerimaan[idx].idBarang = barang.idBarang;
+      itemsPenerimaan[idx].namaBarang = barang.namaBarang;
+      itemsPenerimaan[idx].namaBarangKustom = '';
+      itemsPenerimaan[idx].satuan = barang.satuan;
+      inputEl.value = barang.namaBarang;
+      dropdownEl.classList.add('hidden');
+      renderItemPenerimaan();
     });
   });
 }
@@ -798,9 +889,23 @@ document.getElementById('btnKirimPenerimaan').addEventListener('click', function
   pesanStatus.textContent = '';
   pesanStatus.className = 'pesan-status';
 
-  var idPengajuan = document.getElementById('selectPengajuanPenerimaan').value;
-  if (!idPengajuan) {
-    pesanStatus.textContent = 'Pilih pengajuan terlebih dahulu.';
+  var pilihan = document.getElementById('selectPengajuanPenerimaan').value;
+  if (!pilihan) {
+    pesanStatus.textContent = 'Pilih sumber penerimaan terlebih dahulu.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+  var idPengajuanTerkait = pilihan === '_TANPA_' ? '' : pilihan;
+
+  if (itemsPenerimaan.length === 0) {
+    pesanStatus.textContent = 'Minimal 1 item harus diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var belumAdaNama = itemsPenerimaan.filter(function (it) { return !it.namaBarang; });
+  if (belumAdaNama.length > 0) {
+    pesanStatus.textContent = 'Semua item wajib punya nama barang.';
     pesanStatus.className = 'pesan-status error';
     return;
   }
@@ -830,12 +935,12 @@ document.getElementById('btnKirimPenerimaan').addEventListener('click', function
     btn.textContent = 'Menyimpan laporan...';
     return apiGet('submitLaporanPenerimaan', {
       initData: appState.initData,
-      idPengajuanTerkait: idPengajuan,
+      idPengajuanTerkait: idPengajuanTerkait,
       itemsDiterima: JSON.stringify(itemsPenerimaan.map(function (it) {
         return {
-          idBarang: it.idBarang,
-          namaBarangDatabase: it.namaBarang,
-          namaBarangKustom: '',
+          idBarang: it.idBarang || '',
+          namaBarangDatabase: it.idBarang ? it.namaBarang : '',
+          namaBarangKustom: it.idBarang ? '' : it.namaBarang,
           qtyDiterima: it.qtyDiterima,
           satuan: it.satuan,
           kondisi: it.kondisi,
