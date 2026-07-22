@@ -21,6 +21,7 @@
 
     <div class="tab-bar" id="tabBar">
       <button type="button" class="tab-btn active" data-tab="ajukan">Ajukan</button>
+      <button type="button" class="tab-btn" data-tab="terima">Terima</button>
       <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
     </div>
 
@@ -74,10 +75,31 @@
 
     <div id="viewReview" class="hidden">
       <main>
+        <div class="section-label">Pengajuan Menunggu Persetujuan</div>
         <div id="daftarReview">
-          <p class="teks-kosong">Memuat daftar pengajuan...</p>
+          <p class="teks-kosong">Memuat...</p>
+        </div>
+        <div class="section-label">Laporan Penerimaan Menunggu Persetujuan</div>
+        <div id="daftarReviewPenerimaan">
+          <p class="teks-kosong">Memuat...</p>
         </div>
       </main>
+    </div>
+
+    <div id="viewTerima" class="hidden">
+      <main>
+        <div class="section-label">Pilih Pengajuan</div>
+        <div class="field">
+          <select id="selectPengajuanPenerimaan">
+            <option value="">-- Pilih pengajuan yang sudah disetujui --</option>
+          </select>
+        </div>
+        <div id="daftarItemPenerimaan"></div>
+      </main>
+      <footer class="submit-bar hidden" id="submitBarPenerimaan">
+        <button type="button" id="btnKirimPenerimaan">Kirim Laporan Penerimaan</button>
+        <div class="pesan-status" id="pesanStatusPenerimaan"></div>
+      </footer>
     </div>
   </div>
 
