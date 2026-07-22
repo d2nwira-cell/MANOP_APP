@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxyX1NjfdYHhYNfiC4uVZ8SbBWVeF-PNUUBKVMEv1HzvQOKTYQEUKlDgR-0HUWJY54J7w/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzS6YbzFWVSvZq-KzMTI-NrV12FFwJ35d2w0TJbKjcCjyQE7BW27osDlvhk8STNHDJ6vQ/exec';
 
 // =========================================================
 
@@ -433,8 +433,11 @@ document.getElementById('btnKirim').addEventListener('click', function () {
 mulai();
 
 // ---------------------------------------------------------
-// Tab Bar (Ajukan / Review)
+// Tab Bar (Ajukan / Terima / Review)
 // ---------------------------------------------------------
+
+var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewReview'];
+var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', review: 'Review' };
 
 document.getElementById('tabBar').addEventListener('click', function (e) {
   var btn = e.target.closest('.tab-btn');
@@ -444,16 +447,13 @@ document.getElementById('tabBar').addEventListener('click', function (e) {
   document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
   btn.classList.add('active');
 
-  if (tab === 'ajukan') {
-    document.getElementById('viewAjukan').classList.remove('hidden');
-    document.getElementById('viewReview').classList.add('hidden');
-    document.getElementById('judulHalaman').textContent = 'Pengajuan Baru';
-  } else {
-    document.getElementById('viewAjukan').classList.add('hidden');
-    document.getElementById('viewReview').classList.remove('hidden');
-    document.getElementById('judulHalaman').textContent = 'Review Pengajuan';
-    muatDaftarReview();
-  }
+  SEMUA_VIEW.forEach(function (idView) {
+    document.getElementById(idView).classList.toggle('hidden', idView !== 'view' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  });
+  document.getElementById('judulHalaman').textContent = JUDUL_PER_TAB[tab];
+
+  if (tab === 'terima') muatPengajuanUntukPenerimaan();
+  if (tab === 'review') muatDaftarReview();
 });
 
 // ---------------------------------------------------------
@@ -465,6 +465,24 @@ function formatRupiah(angka) {
 }
 
 function muatDaftarReview() {
+  muatDaftarReviewPengajuan();
+  muatDaftarReviewPenerimaan();
+}
+
+function perbaruiBadgeReview() {
+  var totalPengajuan = parseInt(document.getElementById('daftarReview').dataset.jumlah || '0', 10);
+  var totalPenerimaan = parseInt(document.getElementById('daftarReviewPenerimaan').dataset.jumlah || '0', 10);
+  var total = totalPengajuan + totalPenerimaan;
+  var badge = document.getElementById('badgeReview');
+  if (total > 0) {
+    badge.textContent = total;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function muatDaftarReviewPengajuan() {
   var kontainer = document.getElementById('daftarReview');
   kontainer.innerHTML = '<p class="teks-kosong">Memuat daftar pengajuan...</p>';
 
@@ -475,13 +493,8 @@ function muatDaftarReview() {
         return;
       }
 
-      var badge = document.getElementById('badgeReview');
-      if (hasil.daftar.length > 0) {
-        badge.textContent = hasil.daftar.length;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
+      kontainer.dataset.jumlah = hasil.daftar.length;
+      perbaruiBadgeReview();
 
       if (hasil.daftar.length === 0) {
         kontainer.innerHTML = '<p class="teks-kosong">Tidak ada pengajuan yang menunggu review.</p>';
@@ -513,7 +526,7 @@ function muatDaftarReview() {
 
       kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju');
+          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakPengajuan', 'idPengajuan', kontainer);
         });
       });
     })
@@ -522,24 +535,75 @@ function muatDaftarReview() {
     });
 }
 
-function prosesKeputusan(btnDiklik, idPengajuan, disetujui) {
+function muatDaftarReviewPenerimaan() {
+  var kontainer = document.getElementById('daftarReviewPenerimaan');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat daftar laporan...</p>';
+
+  apiGet('getLaporanPenerimaanPending', { initData: appState.initData })
+    .then(function (hasil) {
+      if (!hasil.sukses) {
+        kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+        return;
+      }
+
+      kontainer.dataset.jumlah = hasil.daftar.length;
+      perbaruiBadgeReview();
+
+      if (hasil.daftar.length === 0) {
+        kontainer.innerHTML = '<p class="teks-kosong">Tidak ada laporan penerimaan yang menunggu review.</p>';
+        return;
+      }
+
+      kontainer.innerHTML = '';
+      hasil.daftar.forEach(function (p) {
+        var card = document.createElement('div');
+        card.className = 'review-card';
+
+        var daftarItemHtml = p.items.map(function (it) {
+          return '<li>' + it.namaBarang + ' — ' + it.qtyDiterima + ' ' + it.satuan + ' (' + it.kondisi + ')' +
+            (it.urlFoto ? '<br><img src="' + it.urlFoto + '" class="preview-foto" style="max-height:100px; margin-top:4px;"/>' : '') +
+            '</li>';
+        }).join('');
+
+        card.innerHTML =
+          '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">Pengajuan ' + p.idPengajuanTerkait + '</span></div>' +
+          '<ul class="review-items">' + daftarItemHtml + '</ul>' +
+          '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
+          '<div class="review-actions">' +
+          '<button type="button" class="btn-tolak" data-id="' + p.idPenerimaan + '" data-aksi="tolak">Tolak</button>' +
+          '<button type="button" class="btn-setujui" data-id="' + p.idPenerimaan + '" data-aksi="setuju">Setujui</button>' +
+          '</div>';
+
+        kontainer.appendChild(card);
+      });
+
+      kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakLaporanPenerimaan', 'idPenerimaan', kontainer);
+        });
+      });
+    })
+    .catch(function (err) {
+      kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+    });
+}
+
+function prosesKeputusan(btnDiklik, idValue, disetujui, namaAksi, namaParamId, kontainerAsal) {
   var card = btnDiklik.closest('.review-card');
   var catatan = card.querySelector('.catatan-review').value;
 
   if (!disetujui && !catatan) {
-    alert('Catatan wajib diisi kalau menolak pengajuan.');
+    alert('Catatan wajib diisi kalau menolak.');
     return;
   }
 
   card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   btnDiklik.textContent = 'Memproses...';
 
-  apiGet('approveTolakPengajuan', {
-    initData: appState.initData,
-    idPengajuan: idPengajuan,
-    disetujui: disetujui,
-    catatan: catatan
-  }).then(function (hasil) {
+  var params = { initData: appState.initData, disetujui: disetujui, catatan: catatan };
+  params[namaParamId] = idValue;
+
+  apiGet(namaAksi, params).then(function (hasil) {
     if (!hasil.sukses) {
       alert(hasil.pesan);
       card.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
@@ -548,12 +612,252 @@ function prosesKeputusan(btnDiklik, idPengajuan, disetujui) {
     }
     card.style.opacity = '0.4';
     card.innerHTML = '<p style="text-align:center; margin:0;">' + (disetujui ? '✅ Disetujui' : '🚫 Ditolak') + '</p>';
-    var badge = document.getElementById('badgeReview');
-    var sisa = parseInt(badge.textContent || '0', 10) - 1;
-    if (sisa > 0) { badge.textContent = sisa; } else { badge.classList.add('hidden'); }
+    var sisa = parseInt(kontainerAsal.dataset.jumlah || '0', 10) - 1;
+    kontainerAsal.dataset.jumlah = Math.max(sisa, 0);
+    perbaruiBadgeReview();
   }).catch(function (err) {
     alert('Gagal memproses: ' + err.message);
     card.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
     btnDiklik.textContent = disetujui ? 'Setujui' : 'Tolak';
   });
 }
+
+// ---------------------------------------------------------
+// Laporan Penerimaan
+// ---------------------------------------------------------
+
+var itemsPenerimaan = []; // { idBarang, namaBarang, qtyDiajukan, satuan, qtyDiterima, kondisi, fotoBase64, fotoMime, urlFoto, statusUpload }
+
+function muatPengajuanUntukPenerimaan() {
+  var select = document.getElementById('selectPengajuanPenerimaan');
+  if (select.dataset.termuat === '1') return; // sudah pernah dimuat, tidak perlu ulang tiap buka tab
+
+  apiGet('getPengajuanUntukPenerimaan', { initData: appState.initData })
+    .then(function (hasil) {
+      if (!hasil.sukses) {
+        alert(hasil.pesan);
+        return;
+      }
+      appState.daftarPengajuanPenerimaan = hasil.daftar;
+      hasil.daftar.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.idPengajuan;
+        opt.textContent = p.idPengajuan + ' — ' + (p.tanggalPemakaian || p.tanggalPengajuan);
+        select.appendChild(opt);
+      });
+      select.dataset.termuat = '1';
+    })
+    .catch(function (err) { alert('Gagal memuat daftar pengajuan: ' + err.message); });
+}
+
+document.getElementById('selectPengajuanPenerimaan').addEventListener('change', function () {
+  var idPengajuan = this.value;
+  var submitBar = document.getElementById('submitBarPenerimaan');
+
+  if (!idPengajuan) {
+    document.getElementById('daftarItemPenerimaan').innerHTML = '';
+    submitBar.classList.add('hidden');
+    return;
+  }
+
+  var pengajuan = appState.daftarPengajuanPenerimaan.filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
+  if (!pengajuan) return;
+
+  itemsPenerimaan = pengajuan.items.map(function (it) {
+    return {
+      idBarang: it.idBarang,
+      namaBarang: it.namaBarang,
+      qtyDiajukan: it.qtyDiajukan,
+      satuan: it.satuan,
+      qtyDiterima: it.qtyDiajukan,
+      kondisi: 'Baik',
+      fotoBase64: null,
+      fotoMime: null,
+      urlFoto: null,
+      statusUpload: null
+    };
+  });
+
+  renderItemPenerimaan();
+  submitBar.classList.remove('hidden');
+});
+
+function renderItemPenerimaan() {
+  var kontainer = document.getElementById('daftarItemPenerimaan');
+  kontainer.innerHTML = '';
+
+  itemsPenerimaan.forEach(function (item, index) {
+    var card = document.createElement('div');
+    card.className = 'item-card';
+
+    card.innerHTML =
+      '<div class="item-card-top"><span>' + item.namaBarang + ' <span class="ref-qty">(diajukan: ' + item.qtyDiajukan + ' ' + item.satuan + ')</span></span></div>' +
+      '<div class="item-row">' +
+      '<input type="number" min="0" placeholder="Qty diterima" data-idx="' + index + '" data-key="qtyDiterima" value="' + item.qtyDiterima + '">' +
+      '<select data-idx="' + index + '" data-key="kondisi">' +
+      '<option value="Baik"' + (item.kondisi === 'Baik' ? ' selected' : '') + '>Baik</option>' +
+      '<option value="Rusak"' + (item.kondisi === 'Rusak' ? ' selected' : '') + '>Rusak</option>' +
+      '<option value="Kurang"' + (item.kondisi === 'Kurang' ? ' selected' : '') + '>Kurang</option>' +
+      '</select>' +
+      '</div>' +
+      (item.urlFoto ? '<img src="' + item.urlFoto + '" class="preview-foto">' : (item.fotoBase64 ? '<img src="data:' + item.fotoMime + ';base64,' + item.fotoBase64 + '" class="preview-foto">' : '')) +
+      '<button type="button" class="btn-ambil-foto" data-idx="' + index + '">📷 ' + (item.fotoBase64 || item.urlFoto ? 'Ganti Foto' : 'Ambil Foto') + '</button>' +
+      '<input type="file" accept="image/*" capture="environment" class="hidden input-file-foto" data-idx="' + index + '">' +
+      (item.statusUpload ? '<div class="status-upload ' + (item.statusUpload.tipe) + '">' + item.statusUpload.teks + '</div>' : '');
+
+    kontainer.appendChild(card);
+  });
+
+  kontainer.querySelectorAll('[data-key]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      var idx = parseInt(el.dataset.idx, 10);
+      var key = el.dataset.key;
+      itemsPenerimaan[idx][key] = key === 'qtyDiterima' ? (parseFloat(el.value) || 0) : el.value;
+    });
+  });
+
+  kontainer.querySelectorAll('.btn-ambil-foto').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = parseInt(btn.dataset.idx, 10);
+      kontainer.querySelector('.input-file-foto[data-idx="' + idx + '"]').click();
+    });
+  });
+
+  kontainer.querySelectorAll('.input-file-foto').forEach(function (inputEl) {
+    inputEl.addEventListener('change', function () {
+      var idx = parseInt(inputEl.dataset.idx, 10);
+      var file = inputEl.files[0];
+      if (!file) return;
+
+      itemsPenerimaan[idx].statusUpload = { tipe: '', teks: 'Memproses foto...' };
+      renderItemPenerimaan();
+
+      kompresFoto(file).then(function (hasil) {
+        itemsPenerimaan[idx].fotoBase64 = hasil.base64;
+        itemsPenerimaan[idx].fotoMime = hasil.mimeType;
+        itemsPenerimaan[idx].urlFoto = null;
+        itemsPenerimaan[idx].statusUpload = { tipe: 'sukses', teks: 'Foto siap, akan diupload saat kirim' };
+        renderItemPenerimaan();
+      }).catch(function (err) {
+        itemsPenerimaan[idx].statusUpload = { tipe: 'error', teks: 'Gagal memproses foto: ' + err.message };
+        renderItemPenerimaan();
+      });
+    });
+  });
+}
+
+function kompresFoto(file) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        var maxDim = 1024;
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve({ base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = function () { reject(new Error('Gagal membaca gambar')); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function () { reject(new Error('Gagal membaca file')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function uploadFotoBerpotongan(base64, mimeType, namaFile) {
+  var UKURAN_POTONGAN = 4000;
+  var sessionId = 'up_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+  var totalPotongan = Math.ceil(base64.length / UKURAN_POTONGAN);
+
+  var rantai = Promise.resolve();
+  for (var i = 0; i < totalPotongan; i++) {
+    (function (i) {
+      var potongan = base64.substr(i * UKURAN_POTONGAN, UKURAN_POTONGAN);
+      rantai = rantai.then(function () {
+        return apiGet('uploadFotoChunk', { sessionId: sessionId, chunkIndex: i, chunkData: potongan });
+      });
+    })(i);
+  }
+
+  return rantai.then(function () {
+    return apiGet('uploadFotoSelesai', { sessionId: sessionId, totalChunks: totalPotongan, namaFile: namaFile, mimeType: mimeType });
+  }).then(function (hasil) {
+    if (!hasil.sukses) throw new Error(hasil.pesan);
+    return hasil.url;
+  });
+}
+
+document.getElementById('btnKirimPenerimaan').addEventListener('click', function () {
+  var pesanStatus = document.getElementById('pesanStatusPenerimaan');
+  pesanStatus.textContent = '';
+  pesanStatus.className = 'pesan-status';
+
+  var idPengajuan = document.getElementById('selectPengajuanPenerimaan').value;
+  if (!idPengajuan) {
+    pesanStatus.textContent = 'Pilih pengajuan terlebih dahulu.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var belumAdaFoto = itemsPenerimaan.filter(function (it) { return !it.fotoBase64 && !it.urlFoto; });
+  if (belumAdaFoto.length > 0) {
+    pesanStatus.textContent = 'Semua item wajib punya foto sebelum dikirim.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var btn = document.getElementById('btnKirimPenerimaan');
+  btn.disabled = true;
+  btn.textContent = 'Mengupload foto...';
+
+  var rantaiUpload = Promise.resolve();
+  itemsPenerimaan.forEach(function (item, idx) {
+    if (item.urlFoto) return;
+    rantaiUpload = rantaiUpload.then(function () {
+      btn.textContent = 'Mengupload foto ' + (idx + 1) + '/' + itemsPenerimaan.length + '...';
+      return uploadFotoBerpotongan(item.fotoBase64, item.fotoMime, 'penerimaan_' + idx + '.jpg')
+        .then(function (url) { item.urlFoto = url; });
+    });
+  });
+
+  rantaiUpload.then(function () {
+    btn.textContent = 'Menyimpan laporan...';
+    return apiGet('submitLaporanPenerimaan', {
+      initData: appState.initData,
+      idPengajuanTerkait: idPengajuan,
+      itemsDiterima: JSON.stringify(itemsPenerimaan.map(function (it) {
+        return {
+          idBarang: it.idBarang,
+          namaBarangDatabase: it.namaBarang,
+          namaBarangKustom: '',
+          qtyDiterima: it.qtyDiterima,
+          satuan: it.satuan,
+          kondisi: it.kondisi,
+          urlFoto: it.urlFoto
+        };
+      }))
+    });
+  }).then(function (hasil) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Penerimaan';
+    if (!hasil.sukses) {
+      pesanStatus.textContent = hasil.pesan;
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    document.getElementById('idPengajuanSukses').textContent = 'ID Laporan: ' + hasil.idPenerimaan;
+    document.getElementById('layarUtama').classList.add('hidden');
+    document.getElementById('layarSukses').classList.remove('hidden');
+  }).catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Penerimaan';
+    pesanStatus.textContent = 'Gagal: ' + err.message;
+    pesanStatus.className = 'pesan-status error';
+  });
+});
