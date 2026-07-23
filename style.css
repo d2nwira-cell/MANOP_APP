@@ -284,6 +284,17 @@ footer.submit-bar button:disabled { opacity: 0.5; }
   color: var(--hint);
   font-weight: 400;
 }
+.tombol-wa {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: #25D366;
+  color: #ffffff;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 14px;
+}
 
 .cari-barang-wrap { position: relative; }
 .dropdown-barang {
