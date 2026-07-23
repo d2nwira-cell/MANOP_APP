@@ -22,6 +22,7 @@
     <div class="tab-bar" id="tabBar">
       <button type="button" class="tab-btn active" data-tab="ajukan">Ajukan</button>
       <button type="button" class="tab-btn" data-tab="terima">Terima</button>
+      <button type="button" class="tab-btn hidden" id="tabPO" data-tab="po">PO</button>
       <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
     </div>
 
@@ -71,6 +72,43 @@
       <button type="button" id="btnKirim">Kirim Pengajuan</button>
       <div class="pesan-status" id="pesanStatus"></div>
     </footer>
+    </div>
+
+    <div id="viewPo" class="hidden">
+      <main>
+        <div id="buatPOSection" class="hidden">
+          <div class="section-label">Pilih Pengajuan</div>
+          <div class="field">
+            <select id="selectPengajuanPO">
+              <option value="">-- Pilih pengajuan --</option>
+            </select>
+          </div>
+          <div id="daftarItemPO"></div>
+
+          <div class="section-label">Tugaskan Ke</div>
+          <div class="toggle-group" id="toggleTujuanPO">
+            <button type="button" class="active" data-tujuan="purchasing">Staff Purchasing</button>
+            <button type="button" data-tujuan="supplier">Supplier</button>
+          </div>
+          <div class="field" id="fieldPilihPurchasing">
+            <select id="selectPurchasing"><option value="">-- Pilih staff purchasing --</option></select>
+          </div>
+          <div class="field hidden" id="fieldPilihSupplier">
+            <select id="selectSupplier"><option value="">-- Pilih supplier --</option></select>
+          </div>
+          <div class="field">
+            <label for="inputCatatanPO">Catatan (opsional)</label>
+            <textarea id="inputCatatanPO" placeholder="Instruksi tambahan untuk yang ditugaskan"></textarea>
+          </div>
+          <button type="button" id="btnBuatPO" class="btn-setujui" style="width:100%; padding:12px; border-radius:10px; font-size:15px;">Buat Purchase Order</button>
+          <div class="pesan-status" id="pesanStatusPO"></div>
+        </div>
+
+        <div id="poSayaSection" class="hidden">
+          <div class="section-label">Purchase Order Untuk Saya</div>
+          <div id="daftarPOSaya"><p class="teks-kosong">Memuat...</p></div>
+        </div>
+      </main>
     </div>
 
     <div id="viewReview" class="hidden">
