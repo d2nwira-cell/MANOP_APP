@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycby5DwXNqE-Otg2IW5zRjpnaU2CIHBYfb4i9GTMQHKmlDYvD2gNCaMxnzWg4mNDiZqlomQ/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbylby8BopS6ZqxGA0ul4uejhRZ2uJds5M-4kN6wU9L22TWQZiQlMHq_6LL-cyVMe2YYUQ/exec';
 
 // =========================================================
 
@@ -130,6 +130,9 @@ function mulai() {
 
       if (hasil.role === 'Owner') {
         document.getElementById('tabReview').classList.remove('hidden');
+      }
+      if (hasil.role === 'Owner' || hasil.role === 'Purchasing') {
+        document.getElementById('tabPO').classList.remove('hidden');
       }
 
       return apiGet('getMasterBarang').then(function (barang) {
@@ -436,8 +439,8 @@ mulai();
 // Tab Bar (Ajukan / Terima / Review)
 // ---------------------------------------------------------
 
-var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewReview'];
-var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', review: 'Review' };
+var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPo', 'viewReview'];
+var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', po: 'Purchase Order', review: 'Review' };
 
 document.getElementById('tabBar').addEventListener('click', function (e) {
   var btn = e.target.closest('.tab-btn');
@@ -454,6 +457,7 @@ document.getElementById('tabBar').addEventListener('click', function (e) {
 
   if (tab === 'terima') muatPengajuanUntukPenerimaan();
   if (tab === 'review') muatDaftarReview();
+  if (tab === 'po') muatTabPO();
 });
 
 // ---------------------------------------------------------
@@ -966,3 +970,217 @@ document.getElementById('btnKirimPenerimaan').addEventListener('click', function
     pesanStatus.className = 'pesan-status error';
   });
 });
+
+// ---------------------------------------------------------
+// Purchase Order
+// ---------------------------------------------------------
+
+function muatTabPO() {
+  if (appState.role === 'Owner') {
+    document.getElementById('buatPOSection').classList.remove('hidden');
+    document.getElementById('poSayaSection').classList.add('hidden');
+    muatDataBuatPO();
+  } else if (appState.role === 'Purchasing') {
+    document.getElementById('buatPOSection').classList.add('hidden');
+    document.getElementById('poSayaSection').classList.remove('hidden');
+    muatPOMilikSaya();
+  }
+}
+
+function muatDataBuatPO() {
+  var select = document.getElementById('selectPengajuanPO');
+  if (select.dataset.termuat !== '1') {
+    apiGet('getPengajuanUntukPO', { initData: appState.initData }).then(function (hasil) {
+      if (!hasil.sukses) { alert(hasil.pesan); return; }
+      appState.daftarPengajuanPO = hasil.daftar;
+      hasil.daftar.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.idPengajuan;
+        opt.textContent = p.idPengajuan + ' — ' + p.namaPemohon;
+        select.appendChild(opt);
+      });
+      select.dataset.termuat = '1';
+    });
+  }
+
+  if (!appState.daftarPurchasingTermuat) {
+    apiGet('getDaftarPurchasing', { initData: appState.initData }).then(function (hasil) {
+      if (!hasil.sukses) return;
+      var sel = document.getElementById('selectPurchasing');
+      hasil.daftar.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.telegramId;
+        opt.textContent = p.nama;
+        sel.appendChild(opt);
+      });
+      appState.daftarPurchasingTermuat = true;
+    });
+  }
+
+  if (!appState.daftarSupplierTermuat) {
+    apiGet('getDaftarSupplier', { initData: appState.initData }).then(function (hasil) {
+      if (!hasil.sukses) return;
+      var sel = document.getElementById('selectSupplier');
+      hasil.daftar.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.idSupplier;
+        opt.textContent = s.namaSupplier;
+        sel.appendChild(opt);
+      });
+      appState.daftarSupplierTermuat = true;
+    });
+  }
+}
+
+document.getElementById('selectPengajuanPO').addEventListener('change', function () {
+  var idPengajuan = this.value;
+  var kontainer = document.getElementById('daftarItemPO');
+  kontainer.innerHTML = '';
+  if (!idPengajuan) return;
+
+  var pengajuan = (appState.daftarPengajuanPO || []).filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
+  if (!pengajuan) return;
+
+  var adaItem = false;
+  pengajuan.items.forEach(function (it) {
+    if (it.sudahDiPO) return;
+    adaItem = true;
+    var label = document.createElement('label');
+    label.className = 'item-card';
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+    label.style.gap = '10px';
+    label.innerHTML =
+      '<input type="checkbox" value="' + it.idDetail + '" class="checkbox-item-po" style="width:18px; height:18px;">' +
+      '<span>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</span>';
+    kontainer.appendChild(label);
+  });
+
+  if (!adaItem) {
+    kontainer.innerHTML = '<p class="teks-kosong">Semua item pengajuan ini sudah dimasukkan ke PO lain.</p>';
+  }
+});
+
+document.getElementById('toggleTujuanPO').addEventListener('click', function (e) {
+  var btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#toggleTujuanPO button').forEach(function (b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  var tujuan = btn.dataset.tujuan;
+  document.getElementById('fieldPilihPurchasing').classList.toggle('hidden', tujuan !== 'purchasing');
+  document.getElementById('fieldPilihSupplier').classList.toggle('hidden', tujuan !== 'supplier');
+});
+
+document.getElementById('btnBuatPO').addEventListener('click', function () {
+  var pesanStatus = document.getElementById('pesanStatusPO');
+  pesanStatus.textContent = '';
+  pesanStatus.className = 'pesan-status';
+
+  var idPengajuan = document.getElementById('selectPengajuanPO').value;
+  if (!idPengajuan) {
+    pesanStatus.textContent = 'Pilih pengajuan terlebih dahulu.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var detailIdList = Array.prototype.map.call(
+    document.querySelectorAll('.checkbox-item-po:checked'),
+    function (el) { return el.value; }
+  );
+  if (detailIdList.length === 0) {
+    pesanStatus.textContent = 'Pilih minimal 1 item.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var tujuanAktif = document.querySelector('#toggleTujuanPO button.active').dataset.tujuan;
+  var penugasan;
+  if (tujuanAktif === 'purchasing') {
+    var telegramIdPurchasing = document.getElementById('selectPurchasing').value;
+    if (!telegramIdPurchasing) {
+      pesanStatus.textContent = 'Pilih staff purchasing.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    penugasan = { tipe: 'purchasing', telegramId: telegramIdPurchasing };
+  } else {
+    var idSupplier = document.getElementById('selectSupplier').value;
+    if (!idSupplier) {
+      pesanStatus.textContent = 'Pilih supplier.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    penugasan = { tipe: 'supplier', idSupplier: idSupplier };
+  }
+
+  var btn = document.getElementById('btnBuatPO');
+  btn.disabled = true;
+  btn.textContent = 'Membuat PO...';
+
+  apiGet('buatPO', {
+    initData: appState.initData,
+    idPengajuanInduk: idPengajuan,
+    detailIdList: JSON.stringify(detailIdList),
+    penugasan: JSON.stringify(penugasan),
+    catatan: document.getElementById('inputCatatanPO').value
+  }).then(function (hasil) {
+    btn.disabled = false;
+    btn.textContent = 'Buat Purchase Order';
+    if (!hasil.sukses) {
+      pesanStatus.textContent = hasil.pesan;
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    pesanStatus.textContent = '✅ PO berhasil dibuat: ' + hasil.idPO;
+    pesanStatus.className = '';
+    document.getElementById('inputCatatanPO').value = '';
+    document.querySelectorAll('.checkbox-item-po').forEach(function (cb) { cb.checked = false; });
+
+    // Muat ulang daftar pengajuan supaya item yang baru dipakai tidak muncul lagi
+    var select = document.getElementById('selectPengajuanPO');
+    while (select.options.length > 1) select.remove(1);
+    select.dataset.termuat = '';
+    document.getElementById('daftarItemPO').innerHTML = '';
+    muatDataBuatPO();
+  }).catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = 'Buat Purchase Order';
+    pesanStatus.textContent = 'Gagal: ' + err.message;
+    pesanStatus.className = 'pesan-status error';
+  });
+});
+
+function muatPOMilikSaya() {
+  var kontainer = document.getElementById('daftarPOSaya');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat...</p>';
+
+  apiGet('getPOMilikSaya', { initData: appState.initData }).then(function (hasil) {
+    if (!hasil.sukses) {
+      kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+      return;
+    }
+    if (hasil.daftar.length === 0) {
+      kontainer.innerHTML = '<p class="teks-kosong">Belum ada PO yang ditugaskan ke Anda.</p>';
+      return;
+    }
+
+    kontainer.innerHTML = '';
+    hasil.daftar.forEach(function (po) {
+      var card = document.createElement('div');
+      card.className = 'review-card';
+
+      var daftarItemHtml = po.items.map(function (it) {
+        return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</li>';
+      }).join('');
+
+      card.innerHTML =
+        '<div class="review-top"><span class="review-nama">' + po.idPO + '</span><span class="review-jenis">' + po.statusPO + '</span></div>' +
+        '<div class="review-deskripsi">Dari Pengajuan: ' + po.idPengajuanInduk + (po.catatanManajer ? '<br>Catatan: ' + po.catatanManajer : '') + '</div>' +
+        '<ul class="review-items">' + daftarItemHtml + '</ul>';
+
+      kontainer.appendChild(card);
+    });
+  }).catch(function (err) {
+    kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+  });
+}
