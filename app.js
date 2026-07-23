@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbylby8BopS6ZqxGA0ul4uejhRZ2uJds5M-4kN6wU9L22TWQZiQlMHq_6LL-cyVMe2YYUQ/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxzob3ro4pgEwH4jY1NqVIL0RTbCahwEjByO2wqsdl1AXRted8O03K_gMxXIRxfqhBruw/exec';
 
 // =========================================================
 
@@ -634,10 +634,15 @@ var itemsPenerimaan = []; // { idBarang, namaBarang, qtyDiajukan, satuan, qtyDit
 
 function muatPengajuanUntukPenerimaan() {
   var select = document.getElementById('selectPengajuanPenerimaan');
-  if (select.dataset.termuat === '1') return; // sudah pernah dimuat, tidak perlu ulang tiap buka tab
+  // Tandai SEGERA (sebelum request async dikirim) -- kalau tab di-tap
+  // dua kali berturut-turut dengan cepat, percobaan kedua langsung
+  // dihentikan di sini, tidak menunggu balasan server dulu baru ditandai.
+  if (select.dataset.termuat === '1' || select.dataset.sedangMemuat === '1') return;
+  select.dataset.sedangMemuat = '1';
 
   apiGet('getPengajuanUntukPenerimaan', { initData: appState.initData })
     .then(function (hasil) {
+      select.dataset.sedangMemuat = '';
       if (!hasil.sukses) {
         alert(hasil.pesan);
         return;
@@ -646,12 +651,25 @@ function muatPengajuanUntukPenerimaan() {
       hasil.daftar.forEach(function (p) {
         var opt = document.createElement('option');
         opt.value = p.idPengajuan;
-        opt.textContent = p.idPengajuan + ' — ' + (p.tanggalPemakaian || p.tanggalPengajuan);
+        opt.textContent = p.idPengajuan + ' — ' + formatTanggalTampil(p.tanggalPemakaian || p.tanggalPengajuan);
         select.appendChild(opt);
       });
       select.dataset.termuat = '1';
     })
-    .catch(function (err) { alert('Gagal memuat daftar pengajuan: ' + err.message); });
+    .catch(function (err) { select.dataset.sedangMemuat = ''; alert('Gagal memuat daftar pengajuan: ' + err.message); });
+}
+
+/**
+ * Ubah "2026-07-20" jadi "20 Jul 2026" supaya enak dibaca di dropdown/kartu.
+ * Aman dipakai untuk string apapun -- kalau bukan format tanggal yang
+ * dikenali, dikembalikan apa adanya.
+ */
+function formatTanggalTampil(nilaiTanggal) {
+  if (!nilaiTanggal) return '-';
+  var cocok = /^(\d{4})-(\d{2})-(\d{2})/.exec(nilaiTanggal);
+  if (!cocok) return nilaiTanggal;
+  var namaBulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  return parseInt(cocok[3], 10) + ' ' + namaBulan[parseInt(cocok[2], 10) - 1] + ' ' + cocok[1];
 }
 
 document.getElementById('selectPengajuanPenerimaan').addEventListener('change', function () {
@@ -989,8 +1007,10 @@ function muatTabPO() {
 
 function muatDataBuatPO() {
   var select = document.getElementById('selectPengajuanPO');
-  if (select.dataset.termuat !== '1') {
+  if (select.dataset.termuat !== '1' && select.dataset.sedangMemuat !== '1') {
+    select.dataset.sedangMemuat = '1';
     apiGet('getPengajuanUntukPO', { initData: appState.initData }).then(function (hasil) {
+      select.dataset.sedangMemuat = '';
       if (!hasil.sukses) { alert(hasil.pesan); return; }
       appState.daftarPengajuanPO = hasil.daftar;
       hasil.daftar.forEach(function (p) {
@@ -1000,7 +1020,7 @@ function muatDataBuatPO() {
         select.appendChild(opt);
       });
       select.dataset.termuat = '1';
-    });
+    }).catch(function () { select.dataset.sedangMemuat = ''; });
   }
 
   if (!appState.daftarPurchasingTermuat) {
@@ -1020,6 +1040,7 @@ function muatDataBuatPO() {
   if (!appState.daftarSupplierTermuat) {
     apiGet('getDaftarSupplier', { initData: appState.initData }).then(function (hasil) {
       if (!hasil.sukses) return;
+      appState.daftarSupplier = hasil.daftar;
       var sel = document.getElementById('selectSupplier');
       hasil.daftar.forEach(function (s) {
         var opt = document.createElement('option');
@@ -1032,34 +1053,138 @@ function muatDataBuatPO() {
   }
 }
 
+var itemsPOState = [];
+
 document.getElementById('selectPengajuanPO').addEventListener('change', function () {
   var idPengajuan = this.value;
+  itemsPOState = [];
+
+  if (idPengajuan) {
+    var pengajuan = (appState.daftarPengajuanPO || []).filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
+    if (pengajuan) {
+      pengajuan.items.forEach(function (it) {
+        if (it.sudahDiPO) return;
+        itemsPOState.push({
+          asal: 'pengajuan',
+          idDetailPengajuan: it.idDetail,
+          idBarang: it.idBarang,
+          namaBarang: it.namaBarang,
+          qty: it.qty,
+          satuan: it.satuan,
+          disertakan: true
+        });
+      });
+    }
+  }
+
+  renderItemPO();
+});
+
+document.getElementById('btnTambahItemPO').addEventListener('click', function () {
+  itemsPOState.push({
+    asal: 'manual', idDetailPengajuan: null, idBarang: '', namaBarang: '', qty: 1, satuan: '', disertakan: true
+  });
+  renderItemPO();
+});
+
+/**
+ * Render daftar item PO. Item dari pengajuan: checkbox sertakan/tidak +
+ * QTY BISA DIEDIT (naik/turun dari yang diajukan semula). Item manual:
+ * pencarian barang bebas (sama seperti form lain) + selalu ikut terkirim.
+ */
+function renderItemPO() {
   var kontainer = document.getElementById('daftarItemPO');
   kontainer.innerHTML = '';
-  if (!idPengajuan) return;
 
-  var pengajuan = (appState.daftarPengajuanPO || []).filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
-  if (!pengajuan) return;
+  if (itemsPOState.length === 0) {
+    kontainer.innerHTML = '<p class="teks-kosong">Belum ada item. Pilih pengajuan di atas, atau tambah item manual di bawah.</p>';
+    return;
+  }
 
-  var adaItem = false;
-  pengajuan.items.forEach(function (it) {
-    if (it.sudahDiPO) return;
-    adaItem = true;
-    var label = document.createElement('label');
-    label.className = 'item-card';
-    label.style.display = 'flex';
-    label.style.alignItems = 'center';
-    label.style.gap = '10px';
-    label.innerHTML =
-      '<input type="checkbox" value="' + it.idDetail + '" class="checkbox-item-po" style="width:18px; height:18px;">' +
-      '<span>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</span>';
-    kontainer.appendChild(label);
+  itemsPOState.forEach(function (item, index) {
+    var card = document.createElement('div');
+    card.className = 'item-card';
+
+    var bagianAtas = item.asal === 'pengajuan'
+      ? '<label class="item-card-top" style="cursor:pointer;">' +
+        '<span style="display:flex; align-items:center; gap:8px;"><input type="checkbox" data-idx-po="' + index + '" data-key-po="disertakan"' + (item.disertakan ? ' checked' : '') + ' style="width:18px;height:18px;">' + item.namaBarang + '</span>' +
+        '</label>'
+      : '<div class="item-card-top"><span>Item Tambahan</span><button type="button" class="remove" data-hapus-po="' + index + '">Hapus</button></div>' +
+        '<div class="field cari-barang-wrap">' +
+        '<input type="text" autocomplete="off" placeholder="Cari atau ketik nama barang..." class="input-cari-barang-po" data-idx-po="' + index + '" value="' + (item.namaBarang || '').replace(/"/g, '&quot;') + '">' +
+        '<div class="dropdown-barang hidden" data-idx-po-dd="' + index + '"></div>' +
+        '</div>';
+
+    card.innerHTML = bagianAtas +
+      '<div class="item-row">' +
+      '<input type="number" min="0" placeholder="Qty" data-idx-po="' + index + '" data-key-po="qty" value="' + item.qty + '">' +
+      '<input type="text" placeholder="Satuan" data-idx-po="' + index + '" data-key-po="satuan" value="' + item.satuan + '">' +
+      '</div>';
+
+    kontainer.appendChild(card);
   });
 
-  if (!adaItem) {
-    kontainer.innerHTML = '<p class="teks-kosong">Semua item pengajuan ini sudah dimasukkan ke PO lain.</p>';
-  }
-});
+  kontainer.querySelectorAll('[data-key-po]').forEach(function (el) {
+    el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', function () {
+      var idx = parseInt(el.dataset.idxPo, 10);
+      var key = el.dataset.keyPo;
+      if (key === 'disertakan') itemsPOState[idx].disertakan = el.checked;
+      else if (key === 'qty') itemsPOState[idx].qty = parseFloat(el.value) || 0;
+      else itemsPOState[idx][key] = el.value;
+    });
+  });
+
+  kontainer.querySelectorAll('[data-hapus-po]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      itemsPOState.splice(parseInt(el.dataset.hapusPo, 10), 1);
+      renderItemPO();
+    });
+  });
+
+  kontainer.querySelectorAll('.input-cari-barang-po').forEach(function (inputEl) {
+    var idx = parseInt(inputEl.dataset.idxPo, 10);
+    var dropdownEl = kontainer.querySelector('.dropdown-barang[data-idx-po-dd="' + idx + '"]');
+
+    inputEl.addEventListener('input', function () {
+      itemsPOState[idx].idBarang = '';
+      itemsPOState[idx].namaBarang = inputEl.value;
+      tampilkanSaranBarangPO(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('focus', function () {
+      tampilkanSaranBarangPO(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
+    });
+  });
+}
+
+function tampilkanSaranBarangPO(kataKunci, dropdownEl, idx, inputEl) {
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var hasil = kata
+    ? appState.masterBarang.filter(function (b) { return b.namaBarang.toLowerCase().indexOf(kata) !== -1; })
+    : appState.masterBarang;
+  hasil = hasil.slice(0, 20);
+
+  dropdownEl.innerHTML = hasil.length === 0
+    ? '<div class="teks-kosong-dropdown">Tidak ditemukan -- akan disimpan sebagai barang custom</div>'
+    : hasil.map(function (b) { return '<div class="opsi-barang" data-pilih-idbarang="' + b.idBarang + '">' + b.namaBarang + '</div>'; }).join('');
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-idbarang]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var barang = appState.masterBarang.filter(function (b) { return b.idBarang === opsiEl.dataset.pilihIdbarang; })[0];
+      if (!barang) return;
+      itemsPOState[idx].idBarang = barang.idBarang;
+      itemsPOState[idx].namaBarang = barang.namaBarang;
+      itemsPOState[idx].satuan = barang.satuan;
+      inputEl.value = barang.namaBarang;
+      dropdownEl.classList.add('hidden');
+      renderItemPO();
+    });
+  });
+}
 
 document.getElementById('toggleTujuanPO').addEventListener('click', function (e) {
   var btn = e.target.closest('button');
@@ -1073,7 +1198,7 @@ document.getElementById('toggleTujuanPO').addEventListener('click', function (e)
 
 document.getElementById('btnBuatPO').addEventListener('click', function () {
   var pesanStatus = document.getElementById('pesanStatusPO');
-  pesanStatus.textContent = '';
+  pesanStatus.innerHTML = '';
   pesanStatus.className = 'pesan-status';
 
   var idPengajuan = document.getElementById('selectPengajuanPO').value;
@@ -1083,12 +1208,21 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
     return;
   }
 
-  var detailIdList = Array.prototype.map.call(
-    document.querySelectorAll('.checkbox-item-po:checked'),
-    function (el) { return el.value; }
-  );
-  if (detailIdList.length === 0) {
-    pesanStatus.textContent = 'Pilih minimal 1 item.';
+  // Gabungkan item dari pengajuan (yang dicentang) + semua item manual
+  var itemsPOTerkirim = itemsPOState.filter(function (it) {
+    return it.asal === 'manual' ? !!it.namaBarang : it.disertakan;
+  }).map(function (it) {
+    return {
+      idDetailPengajuan: it.idDetailPengajuan,
+      idBarang: it.idBarang,
+      namaBarang: it.namaBarang,
+      qty: it.qty,
+      satuan: it.satuan
+    };
+  });
+
+  if (itemsPOTerkirim.length === 0) {
+    pesanStatus.textContent = 'Pilih atau tambahkan minimal 1 item.';
     pesanStatus.className = 'pesan-status error';
     return;
   }
@@ -1113,6 +1247,7 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
     penugasan = { tipe: 'supplier', idSupplier: idSupplier };
   }
 
+  var catatanPO = document.getElementById('inputCatatanPO').value;
   var btn = document.getElementById('btnBuatPO');
   btn.disabled = true;
   btn.textContent = 'Membuat PO...';
@@ -1120,9 +1255,9 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
   apiGet('buatPO', {
     initData: appState.initData,
     idPengajuanInduk: idPengajuan,
-    detailIdList: JSON.stringify(detailIdList),
+    itemsPO: JSON.stringify(itemsPOTerkirim),
     penugasan: JSON.stringify(penugasan),
-    catatan: document.getElementById('inputCatatanPO').value
+    catatan: catatanPO
   }).then(function (hasil) {
     btn.disabled = false;
     btn.textContent = 'Buat Purchase Order';
@@ -1131,16 +1266,31 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
       pesanStatus.className = 'pesan-status error';
       return;
     }
-    pesanStatus.textContent = '✅ PO berhasil dibuat: ' + hasil.idPO;
+
+    if (tujuanAktif === 'supplier') {
+      var supplier = (appState.daftarSupplier || []).filter(function (s) { return s.idSupplier === document.getElementById('selectSupplier').value; })[0];
+      if (supplier && supplier.kontakSupplier) {
+        var teksWA = bangunTeksWhatsAppPO(hasil.idPO, idPengajuan, itemsPOTerkirim, catatanPO);
+        var linkWA = bangunLinkWhatsApp(supplier.kontakSupplier, teksWA);
+        pesanStatus.innerHTML = '✅ PO berhasil dibuat: ' + hasil.idPO +
+          '<br><a href="' + linkWA + '" target="_blank" class="tombol-wa">📲 Kirim ke WhatsApp Supplier</a>';
+      } else {
+        pesanStatus.textContent = '✅ PO berhasil dibuat: ' + hasil.idPO + ' (nomor kontak supplier belum tersedia di Master_Supplier)';
+      }
+    } else {
+      pesanStatus.textContent = '✅ PO berhasil dibuat: ' + hasil.idPO;
+    }
     pesanStatus.className = '';
+
     document.getElementById('inputCatatanPO').value = '';
-    document.querySelectorAll('.checkbox-item-po').forEach(function (cb) { cb.checked = false; });
+    itemsPOState = [];
+    renderItemPO();
 
     // Muat ulang daftar pengajuan supaya item yang baru dipakai tidak muncul lagi
     var select = document.getElementById('selectPengajuanPO');
     while (select.options.length > 1) select.remove(1);
+    select.value = '';
     select.dataset.termuat = '';
-    document.getElementById('daftarItemPO').innerHTML = '';
     muatDataBuatPO();
   }).catch(function (err) {
     btn.disabled = false;
@@ -1149,6 +1299,33 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
     pesanStatus.className = 'pesan-status error';
   });
 });
+
+/**
+ * Susun teks ringkasan PO yang enak dibaca untuk dikirim ke Supplier
+ * lewat WhatsApp.
+ */
+function bangunTeksWhatsAppPO(idPO, idPengajuan, items, catatan) {
+  var daftarBaris = items.map(function (it) {
+    return '- ' + it.namaBarang + ' : ' + it.qty + ' ' + it.satuan;
+  }).join('\n');
+
+  return '📋 *Purchase Order*\n' +
+    'ID: ' + idPO + '\n' +
+    'Ref. Pengajuan: ' + idPengajuan + '\n\n' +
+    'Item yang dibutuhkan:\n' + daftarBaris +
+    (catatan ? '\n\nCatatan: ' + catatan : '') +
+    '\n\nMohon segera diproses. Terima kasih.';
+}
+
+/**
+ * Rapikan nomor kontak jadi format internasional (awalan 0 -> 62),
+ * lalu bangun link wa.me dengan teks yang sudah terisi otomatis.
+ */
+function bangunLinkWhatsApp(nomorKontak, teks) {
+  var bersih = (nomorKontak || '').replace(/[^0-9]/g, '');
+  if (bersih.indexOf('0') === 0) bersih = '62' + bersih.substring(1);
+  return 'https://wa.me/' + bersih + '?text=' + encodeURIComponent(teks);
+}
 
 function muatPOMilikSaya() {
   var kontainer = document.getElementById('daftarPOSaya');
