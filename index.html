@@ -137,6 +137,26 @@
         </div>
         <div id="daftarItemPenerimaan"></div>
         <button type="button" class="btn-tambah-item hidden" id="btnTambahItemPenerimaan">+ Tambah Item Lain</button>
+
+        <div id="areaFotoPenerimaan" class="hidden">
+          <div class="section-label">Bukti Foto</div>
+
+          <div class="item-card">
+            <div class="item-card-top"><span>Foto Barang Keseluruhan *</span></div>
+            <div id="previewFotoBarang"></div>
+            <button type="button" class="btn-ambil-foto" id="btnFotoBarang">📷 Ambil/Pilih Foto</button>
+            <input type="file" accept="image/*" capture="environment" class="hidden" id="inputFotoBarang">
+            <div class="status-upload" id="statusFotoBarang"></div>
+          </div>
+
+          <div class="item-card">
+            <div class="item-card-top"><span>Foto Nota / Surat Jalan (opsional)</span></div>
+            <div id="previewFotoNota"></div>
+            <button type="button" class="btn-ambil-foto" id="btnFotoNota">📷 Ambil/Pilih Foto</button>
+            <input type="file" accept="image/*" capture="environment" class="hidden" id="inputFotoNota">
+            <div class="status-upload" id="statusFotoNota"></div>
+          </div>
+        </div>
       </main>
       <footer class="submit-bar hidden" id="submitBarPenerimaan">
         <button type="button" id="btnKirimPenerimaan">Kirim Laporan Penerimaan</button>
