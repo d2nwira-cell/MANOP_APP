@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbw9mQU_Jbd4oFzerr00vc8io8VSVlPkv524z1l0aMyW__Q6AQ63weHG7zwJ3xB-6bv78g/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzhciyU61am0-Ms1FRvE7HnndZCPBUNkZKDUpk2E3KgqWcWKQHkvwCzxVtQEF6QfKEyrQ/exec';
 
 // =========================================================
 
@@ -41,10 +41,12 @@ function panggilApi(action, paramsTambahan) {
     var query = new URLSearchParams(params);
     var src = API_BASE_URL + '?' + query.toString();
 
+    // 30 detik (bukan 15) -- Apps Script kadang butuh waktu lebih lama untuk
+    // "bangun" (cold start) kalau baru pertama kali dipanggil setelah lama tidak aktif.
     var timeoutId = setTimeout(function () {
       bersihkan();
       reject(new Error('Waktu tunggu habis -- server tidak merespon.'));
-    }, 15000);
+    }, 30000);
 
     function bersihkan() {
       clearTimeout(timeoutId);
@@ -1010,11 +1012,49 @@ function muatTabPO() {
     document.getElementById('buatPOSection').classList.remove('hidden');
     document.getElementById('poSayaSection').classList.add('hidden');
     muatDataBuatPO();
+    muatRiwayatPO();
   } else if (appState.role === 'Purchasing') {
     document.getElementById('buatPOSection').classList.add('hidden');
     document.getElementById('poSayaSection').classList.remove('hidden');
     muatPOMilikSaya();
   }
+}
+
+function muatRiwayatPO() {
+  var kontainer = document.getElementById('daftarRiwayatPO');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat...</p>';
+
+  apiGet('getRiwayatPO', { initData: appState.initData }).then(function (hasil) {
+    if (!hasil.sukses) {
+      kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+      return;
+    }
+    if (hasil.daftar.length === 0) {
+      kontainer.innerHTML = '<p class="teks-kosong">Belum ada PO yang dibuat.</p>';
+      return;
+    }
+
+    kontainer.innerHTML = '';
+    hasil.daftar.forEach(function (po) {
+      var card = document.createElement('div');
+      card.className = 'review-card';
+
+      var daftarItemHtml = po.items.map(function (it) {
+        return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</li>';
+      }).join('');
+
+      card.innerHTML =
+        '<div class="review-top"><span class="review-nama">' + po.idPO + '</span><span class="review-jenis">' + po.statusPO + '</span></div>' +
+        '<div class="review-deskripsi">' + po.namaTujuan + '<br>' +
+        (po.idPengajuanInduk ? 'Dari Pengajuan: ' + po.idPengajuanInduk : '🛒 Belanja Mendadak') +
+        (po.catatanManajer ? '<br>Catatan: ' + po.catatanManajer : '') + '</div>' +
+        '<ul class="review-items">' + daftarItemHtml + '</ul>';
+
+      kontainer.appendChild(card);
+    });
+  }).catch(function (err) {
+    kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+  });
 }
 
 function muatDataBuatPO() {
@@ -1314,6 +1354,7 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
     select.value = '';
     select.dataset.termuat = '';
     muatDataBuatPO();
+    muatRiwayatPO();
   }).catch(function (err) {
     btn.disabled = false;
     btn.textContent = 'Buat Purchase Order';
