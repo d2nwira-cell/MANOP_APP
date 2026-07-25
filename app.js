@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyrAS29efnF69TPV_pyJ90v4zd2-pb_ymmkHJozahmaaZlfSqiDx2HMSMJwFcOV3qY3Gg/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxvp_P03NnqBo8VU9LO6Ah7SLf03bjmc12Sq5435gAjiy39K6PliWhSjTRQFZT8Xlzoqw/exec';
 
 // =========================================================
 
@@ -939,30 +939,37 @@ document.getElementById('btnKirimPenerimaan').addEventListener('click', function
     return;
   }
 
-  if (!fotoPenerimaanState.barang.base64 && !fotoPenerimaanState.barang.url) {
-    pesanStatus.textContent = 'Foto barang keseluruhan wajib diupload.';
-    pesanStatus.className = 'pesan-status error';
-    return;
-  }
+  // CATATAN SEMENTARA: foto tidak lagi wajib -- lihat catatan di LaporanService.gs.
+  // Kalau user memang pilih foto, tetap diupload; kalau tidak, laporan tetap terkirim.
 
   var btn = document.getElementById('btnKirimPenerimaan');
   btn.disabled = true;
-  btn.textContent = 'Mengupload foto...';
+  btn.textContent = 'Mengirim...';
 
   var rantaiUpload = Promise.resolve();
 
-  if (!fotoPenerimaanState.barang.url) {
+  if (fotoPenerimaanState.barang.base64 && !fotoPenerimaanState.barang.url) {
     rantaiUpload = rantaiUpload.then(function () {
       btn.textContent = 'Mengupload foto barang...';
       return uploadFotoBerpotongan(fotoPenerimaanState.barang.base64, fotoPenerimaanState.barang.mime, 'penerimaan_barang.jpg')
-        .then(function (url) { fotoPenerimaanState.barang.url = url; });
+        .then(function (url) { fotoPenerimaanState.barang.url = url; })
+        .catch(function (err) {
+          // Foto gagal upload TIDAK menggagalkan seluruh laporan -- cukup
+          // dicatat statusnya, laporan tetap lanjut terkirim tanpa foto ini.
+          document.getElementById('statusFotoBarang').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
+          document.getElementById('statusFotoBarang').className = 'status-upload error';
+        });
     });
   }
   if (fotoPenerimaanState.nota.base64 && !fotoPenerimaanState.nota.url) {
     rantaiUpload = rantaiUpload.then(function () {
       btn.textContent = 'Mengupload foto nota...';
       return uploadFotoBerpotongan(fotoPenerimaanState.nota.base64, fotoPenerimaanState.nota.mime, 'penerimaan_nota.jpg')
-        .then(function (url) { fotoPenerimaanState.nota.url = url; });
+        .then(function (url) { fotoPenerimaanState.nota.url = url; })
+        .catch(function (err) {
+          document.getElementById('statusFotoNota').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
+          document.getElementById('statusFotoNota').className = 'status-upload error';
+        });
     });
   }
 
@@ -971,7 +978,7 @@ document.getElementById('btnKirimPenerimaan').addEventListener('click', function
     return apiGet('submitLaporanPenerimaan', {
       initData: appState.initData,
       idPengajuanTerkait: idPengajuanTerkait,
-      urlFotoBarang: fotoPenerimaanState.barang.url,
+      urlFotoBarang: fotoPenerimaanState.barang.url || '',
       urlFotoNota: fotoPenerimaanState.nota.url || '',
       itemsDiterima: JSON.stringify(itemsPenerimaan.map(function (it) {
         return {
