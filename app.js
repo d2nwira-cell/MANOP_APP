@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxvp_P03NnqBo8VU9LO6Ah7SLf03bjmc12Sq5435gAjiy39K6PliWhSjTRQFZT8Xlzoqw/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwE1oZ7KJOF1kWpjMzHDuPwjd0C2Rq8xghVmA2L6IBN6sSMHjp40Fbp1ewq230J0gk83g/exec';
 
 // =========================================================
 
@@ -656,7 +656,7 @@ function muatPengajuanUntukPenerimaan() {
       hasil.daftar.forEach(function (p) {
         var opt = document.createElement('option');
         opt.value = p.idPengajuan;
-        opt.textContent = p.idPengajuan + ' — ' + formatTanggalTampil(p.tanggalPemakaian || p.tanggalPengajuan);
+        opt.textContent = p.idPengajuan + ' — ' + formatTanggalTampil(p.tanggalPemakaian || p.tanggalPengajuan) + (p.sudahDilaporkan ? ' (Sudah Ada Laporan)' : '');
         select.appendChild(opt);
       });
       select.dataset.termuat = '1';
