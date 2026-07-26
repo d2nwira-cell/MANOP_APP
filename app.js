@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwE1oZ7KJOF1kWpjMzHDuPwjd0C2Rq8xghVmA2L6IBN6sSMHjp40Fbp1ewq230J0gk83g/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzH3J8_MI9nekzq-gQguLU6atcn5HkZeIerlj6RnPiqn2uFlmHwerqWYFMLDYgCkfWyiQ/exec';
 
 // =========================================================
 
@@ -441,8 +441,8 @@ mulai();
 // Tab Bar (Ajukan / Terima / Review)
 // ---------------------------------------------------------
 
-var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPo', 'viewReview'];
-var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', po: 'Purchase Order', review: 'Review' };
+var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPakai', 'viewPo', 'viewReview'];
+var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', pakai: 'Laporan Pemakaian', po: 'Purchase Order', review: 'Review' };
 
 document.getElementById('tabBar').addEventListener('click', function (e) {
   var btn = e.target.closest('.tab-btn');
@@ -458,6 +458,7 @@ document.getElementById('tabBar').addEventListener('click', function (e) {
   document.getElementById('judulHalaman').textContent = JUDUL_PER_TAB[tab];
 
   if (tab === 'terima') muatPengajuanUntukPenerimaan();
+  if (tab === 'pakai') muatFormPakai();
   if (tab === 'review') muatDaftarReview();
   if (tab === 'po') muatTabPO();
 });
@@ -473,12 +474,14 @@ function formatRupiah(angka) {
 function muatDaftarReview() {
   muatDaftarReviewPengajuan();
   muatDaftarReviewPenerimaan();
+  muatDaftarReviewPemakaian();
 }
 
 function perbaruiBadgeReview() {
   var totalPengajuan = parseInt(document.getElementById('daftarReview').dataset.jumlah || '0', 10);
   var totalPenerimaan = parseInt(document.getElementById('daftarReviewPenerimaan').dataset.jumlah || '0', 10);
-  var total = totalPengajuan + totalPenerimaan;
+  var totalPemakaian = parseInt(document.getElementById('daftarReviewPemakaian').dataset.jumlah || '0', 10);
+  var total = totalPengajuan + totalPenerimaan + totalPemakaian;
   var badge = document.getElementById('badgeReview');
   if (total > 0) {
     badge.textContent = total;
@@ -589,6 +592,59 @@ function muatDaftarReviewPenerimaan() {
       kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
         btn.addEventListener('click', function () {
           prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakLaporanPenerimaan', 'idPenerimaan', kontainer);
+        });
+      });
+    })
+    .catch(function (err) {
+      kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+    });
+}
+
+function muatDaftarReviewPemakaian() {
+  var kontainer = document.getElementById('daftarReviewPemakaian');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat daftar laporan...</p>';
+
+  apiGet('getLaporanPemakaianPending', { initData: appState.initData })
+    .then(function (hasil) {
+      if (!hasil.sukses) {
+        kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+        return;
+      }
+
+      kontainer.dataset.jumlah = hasil.daftar.length;
+      perbaruiBadgeReview();
+
+      if (hasil.daftar.length === 0) {
+        kontainer.innerHTML = '<p class="teks-kosong">Tidak ada laporan pemakaian yang menunggu review.</p>';
+        return;
+      }
+
+      kontainer.innerHTML = '';
+      hasil.daftar.forEach(function (p) {
+        var card = document.createElement('div');
+        card.className = 'review-card';
+
+        var daftarItemHtml = p.items.map(function (it) {
+          return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + (it.keterangan ? ' (' + it.keterangan + ')' : '') + '</li>';
+        }).join('');
+
+        card.innerHTML =
+          '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">' + formatTanggalTampil(p.tanggalPakai) + '</span></div>' +
+          (p.keteranganUmum ? '<div class="review-deskripsi">' + p.keteranganUmum + '</div>' : '') +
+          '<ul class="review-items">' + daftarItemHtml + '</ul>' +
+          (p.urlFoto ? '<img src="' + p.urlFoto + '" class="preview-foto">' : '') +
+          '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
+          '<div class="review-actions">' +
+          '<button type="button" class="btn-tolak" data-id="' + p.idPemakaian + '" data-aksi="tolak">Tolak</button>' +
+          '<button type="button" class="btn-setujui" data-id="' + p.idPemakaian + '" data-aksi="setuju">Setujui</button>' +
+          '</div>';
+
+        kontainer.appendChild(card);
+      });
+
+      kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakLaporanPemakaian', 'idPemakaian', kontainer);
         });
       });
     })
@@ -1431,3 +1487,230 @@ function muatPOMilikSaya() {
     kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
   });
 }
+
+// ---------------------------------------------------------
+// Laporan Pemakaian
+// ---------------------------------------------------------
+
+var itemsPakai = [];
+var fotoPakaiState = { base64: null, mime: null, url: null };
+
+function muatFormPakai() {
+  var area = document.getElementById('areaFieldTambahanPakai');
+  if (area.dataset.termuat === '1') return;
+
+  apiGet('getFieldTambahan', { initData: appState.initData, namaMenuBot: 'Laporan_Pemakaian' })
+    .then(function (fieldTambahan) {
+      renderFieldTambahanPakai(fieldTambahan);
+      area.dataset.termuat = '1';
+      if (itemsPakai.length === 0) tambahItemPakai();
+    })
+    .catch(function (err) { alert('Gagal memuat form: ' + err.message); });
+}
+
+function renderFieldTambahanPakai(daftarField) {
+  var area = document.getElementById('areaFieldTambahanPakai');
+  area.innerHTML = '';
+  if (!daftarField || daftarField.length === 0) return;
+
+  var label = document.createElement('div');
+  label.className = 'section-label';
+  label.textContent = 'Informasi Tambahan';
+  area.appendChild(label);
+
+  daftarField.forEach(function (f) {
+    var wrap = document.createElement('div');
+    wrap.className = 'field';
+    var inputType = f.tipeData === 'angka' ? 'number' : 'text';
+    wrap.innerHTML =
+      '<label>' + f.label + (f.wajib ? ' *' : '') + '</label>' +
+      '<input type="' + inputType + '" data-field-tambahan-pakai="' + f.namaField + '">';
+    area.appendChild(wrap);
+  });
+}
+
+function tambahItemPakai() {
+  itemsPakai.push({ idBarang: '', namaBarang: '', qty: 1, satuan: '', keterangan: '' });
+  renderItemPakai();
+}
+
+document.getElementById('btnTambahItemPakai').addEventListener('click', tambahItemPakai);
+
+function renderItemPakai() {
+  var kontainer = document.getElementById('daftarItemPakai');
+  kontainer.innerHTML = '';
+
+  itemsPakai.forEach(function (item, index) {
+    var card = document.createElement('div');
+    card.className = 'item-card';
+
+    card.innerHTML =
+      '<div class="item-card-top"><span>Item ' + (index + 1) + '</span>' +
+      '<button type="button" class="remove" data-hapus-pakai="' + index + '">Hapus</button></div>' +
+      '<div class="field cari-barang-wrap">' +
+      '<input type="text" autocomplete="off" placeholder="Cari atau ketik nama barang..." class="input-cari-barang-pakai" data-idx-pakai="' + index + '" value="' + (item.namaBarang || '').replace(/"/g, '&quot;') + '">' +
+      '<div class="dropdown-barang hidden" data-idx-pakai-dd="' + index + '"></div>' +
+      '</div>' +
+      '<div class="item-row">' +
+      '<input type="number" min="0" placeholder="Jumlah" data-idx-pakai="' + index + '" data-key-pakai="qty" value="' + item.qty + '">' +
+      '<input type="text" placeholder="Satuan" data-idx-pakai="' + index + '" data-key-pakai="satuan" value="' + item.satuan + '">' +
+      '</div>' +
+      '<div class="field"><input type="text" placeholder="Keterangan (opsional)" data-idx-pakai="' + index + '" data-key-pakai="keterangan" value="' + (item.keterangan || '') + '"></div>';
+
+    kontainer.appendChild(card);
+  });
+
+  kontainer.querySelectorAll('[data-key-pakai]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      var idx = parseInt(el.dataset.idxPakai, 10);
+      var key = el.dataset.keyPakai;
+      itemsPakai[idx][key] = key === 'qty' ? (parseFloat(el.value) || 0) : el.value;
+    });
+  });
+
+  kontainer.querySelectorAll('[data-hapus-pakai]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      itemsPakai.splice(parseInt(el.dataset.hapusPakai, 10), 1);
+      renderItemPakai();
+    });
+  });
+
+  kontainer.querySelectorAll('.input-cari-barang-pakai').forEach(function (inputEl) {
+    var idx = parseInt(inputEl.dataset.idxPakai, 10);
+    var dropdownEl = kontainer.querySelector('.dropdown-barang[data-idx-pakai-dd="' + idx + '"]');
+
+    inputEl.addEventListener('input', function () {
+      itemsPakai[idx].idBarang = '';
+      itemsPakai[idx].namaBarang = inputEl.value;
+      tampilkanSaranBarangPakai(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('focus', function () {
+      tampilkanSaranBarangPakai(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
+    });
+  });
+}
+
+function tampilkanSaranBarangPakai(kataKunci, dropdownEl, idx, inputEl) {
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var hasil = kata
+    ? appState.masterBarang.filter(function (b) { return b.namaBarang.toLowerCase().indexOf(kata) !== -1; })
+    : appState.masterBarang;
+  hasil = hasil.slice(0, 20);
+
+  dropdownEl.innerHTML = hasil.length === 0
+    ? '<div class="teks-kosong-dropdown">Tidak ditemukan -- akan disimpan sebagai barang custom</div>'
+    : hasil.map(function (b) { return '<div class="opsi-barang" data-pilih-idbarang="' + b.idBarang + '">' + b.namaBarang + '</div>'; }).join('');
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-idbarang]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var barang = appState.masterBarang.filter(function (b) { return b.idBarang === opsiEl.dataset.pilihIdbarang; })[0];
+      if (!barang) return;
+      itemsPakai[idx].idBarang = barang.idBarang;
+      itemsPakai[idx].namaBarang = barang.namaBarang;
+      itemsPakai[idx].satuan = barang.satuan;
+      inputEl.value = barang.namaBarang;
+      dropdownEl.classList.add('hidden');
+      renderItemPakai();
+    });
+  });
+}
+
+document.getElementById('btnFotoPakai').addEventListener('click', function () {
+  document.getElementById('inputFotoPakai').click();
+});
+
+document.getElementById('inputFotoPakai').addEventListener('change', function () {
+  var file = this.files[0];
+  if (!file) return;
+
+  var statusEl = document.getElementById('statusFotoPakai');
+  statusEl.textContent = 'Memproses foto...';
+  statusEl.className = 'status-upload';
+
+  kompresFoto(file).then(function (hasil) {
+    fotoPakaiState.base64 = hasil.base64;
+    fotoPakaiState.mime = hasil.mimeType;
+    fotoPakaiState.url = null;
+    document.getElementById('previewFotoPakai').innerHTML = '<img src="data:' + hasil.mimeType + ';base64,' + hasil.base64 + '" class="preview-foto">';
+    statusEl.textContent = 'Foto siap, akan diupload saat kirim';
+    statusEl.className = 'status-upload sukses';
+  }).catch(function (err) {
+    statusEl.textContent = 'Gagal memproses foto: ' + err.message;
+    statusEl.className = 'status-upload error';
+  });
+});
+
+document.getElementById('btnKirimPakai').addEventListener('click', function () {
+  var pesanStatus = document.getElementById('pesanStatusPakai');
+  pesanStatus.textContent = '';
+  pesanStatus.className = 'pesan-status';
+
+  var tanggalPakai = document.getElementById('inputTanggalPakai').value;
+  if (!tanggalPakai) {
+    pesanStatus.textContent = 'Tanggal pemakaian wajib diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var itemTanpaNama = itemsPakai.filter(function (it) { return !it.namaBarang; });
+  if (itemsPakai.length === 0 || itemTanpaNama.length > 0) {
+    pesanStatus.textContent = 'Minimal 1 item dengan nama barang harus diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var fieldTambahan = {};
+  document.querySelectorAll('[data-field-tambahan-pakai]').forEach(function (el) {
+    fieldTambahan[el.dataset.fieldTambahanPakai] = el.value;
+  });
+
+  var btn = document.getElementById('btnKirimPakai');
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+
+  var rantai = Promise.resolve();
+  if (fotoPakaiState.base64 && !fotoPakaiState.url) {
+    rantai = rantai.then(function () {
+      btn.textContent = 'Mengupload foto...';
+      return uploadFotoBerpotongan(fotoPakaiState.base64, fotoPakaiState.mime, 'pemakaian.jpg')
+        .then(function (url) { fotoPakaiState.url = url; })
+        .catch(function (err) {
+          document.getElementById('statusFotoPakai').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
+          document.getElementById('statusFotoPakai').className = 'status-upload error';
+        });
+    });
+  }
+
+  rantai.then(function () {
+    btn.textContent = 'Menyimpan laporan...';
+    return apiGet('submitLaporanPemakaian', {
+      initData: appState.initData,
+      tanggalPakai: tanggalPakai,
+      keteranganUmum: document.getElementById('inputKeteranganUmumPakai').value,
+      itemsDipakai: JSON.stringify(itemsPakai),
+      fieldTambahan: JSON.stringify(fieldTambahan),
+      urlFoto: fotoPakaiState.url || ''
+    });
+  }).then(function (hasil) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Pemakaian';
+    if (!hasil.sukses) {
+      pesanStatus.textContent = hasil.pesan;
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    document.getElementById('idPengajuanSukses').textContent = 'ID Laporan: ' + hasil.idPemakaian;
+    document.getElementById('layarUtama').classList.add('hidden');
+    document.getElementById('layarSukses').classList.remove('hidden');
+  }).catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Pemakaian';
+    pesanStatus.textContent = 'Gagal: ' + err.message;
+    pesanStatus.className = 'pesan-status error';
+  });
+});
