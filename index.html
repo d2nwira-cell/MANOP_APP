@@ -22,6 +22,7 @@
     <div class="tab-bar" id="tabBar">
       <button type="button" class="tab-btn active" data-tab="ajukan">Ajukan</button>
       <button type="button" class="tab-btn" data-tab="terima">Terima</button>
+      <button type="button" class="tab-btn" data-tab="pakai">Pakai</button>
       <button type="button" class="tab-btn hidden" id="tabPO" data-tab="po">PO</button>
       <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
     </div>
@@ -126,7 +127,43 @@
         <div id="daftarReviewPenerimaan">
           <p class="teks-kosong">Memuat...</p>
         </div>
+        <div class="section-label">Laporan Pemakaian Menunggu Persetujuan</div>
+        <div id="daftarReviewPemakaian">
+          <p class="teks-kosong">Memuat...</p>
+        </div>
       </main>
+    </div>
+
+    <div id="viewPakai" class="hidden">
+      <main>
+        <div class="section-label">Detail Pemakaian</div>
+        <div class="field">
+          <label for="inputTanggalPakai">Tanggal Pemakaian</label>
+          <input type="date" id="inputTanggalPakai">
+        </div>
+        <div class="field">
+          <label for="inputKeteranganUmumPakai">Keterangan Umum (opsional)</label>
+          <textarea id="inputKeteranganUmumPakai" placeholder="Contoh: Pemakaian harian dapur"></textarea>
+        </div>
+
+        <div id="areaFieldTambahanPakai"></div>
+
+        <div class="section-label">Daftar Item</div>
+        <div id="daftarItemPakai"></div>
+        <button type="button" class="btn-tambah-item" id="btnTambahItemPakai">+ Tambah Item</button>
+
+        <div class="section-label">Bukti Foto (Opsional)</div>
+        <div class="item-card">
+          <div id="previewFotoPakai"></div>
+          <button type="button" class="btn-ambil-foto" id="btnFotoPakai">📷 Ambil/Pilih Foto</button>
+          <input type="file" accept="image/*" capture="environment" class="hidden" id="inputFotoPakai">
+          <div class="status-upload" id="statusFotoPakai"></div>
+        </div>
+      </main>
+      <footer class="submit-bar">
+        <button type="button" id="btnKirimPakai">Kirim Laporan Pemakaian</button>
+        <div class="pesan-status" id="pesanStatusPakai"></div>
+      </footer>
     </div>
 
     <div id="viewTerima" class="hidden">
