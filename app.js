@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzPjl9zYyruSyi7ybIV3Y2d6Cg8pS1oMknXdNZR7cKfbFC5TeJ26i78r63_QkTkus79zg/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxpn79eiKIdSqul6Nxyr0JCXTd26cizRLKMM4MYkiUmwsedx8U7NR1Yu-S5n6e9kfbUdQ/exec';
 
 // =========================================================
 
@@ -135,6 +135,9 @@ function mulai() {
       }
       if (hasil.role === 'Owner' || hasil.role === 'Purchasing') {
         document.getElementById('tabPO').classList.remove('hidden');
+      }
+      if (hasil.role === 'Purchasing') {
+        document.getElementById('opsiSumberPO').classList.remove('hidden');
       }
 
       return apiGet('getMasterBarang').then(function (barang) {
@@ -441,8 +444,8 @@ mulai();
 // Tab Bar (Ajukan / Terima / Review)
 // ---------------------------------------------------------
 
-var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPakai', 'viewPo', 'viewReview'];
-var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', pakai: 'Laporan Pemakaian', po: 'Purchase Order', review: 'Review' };
+var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPakai', 'viewAnggaran', 'viewPo', 'viewReview'];
+var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', pakai: 'Laporan Pemakaian', anggaran: 'Laporan Anggaran', po: 'Purchase Order', review: 'Review' };
 
 document.getElementById('tabBar').addEventListener('click', function (e) {
   var btn = e.target.closest('.tab-btn');
@@ -459,6 +462,7 @@ document.getElementById('tabBar').addEventListener('click', function (e) {
 
   if (tab === 'terima') muatPengajuanUntukPenerimaan();
   if (tab === 'pakai') muatFormPakai();
+  if (tab === 'anggaran') muatFormAnggaran();
   if (tab === 'review') muatDaftarReview();
   if (tab === 'po') muatTabPO();
 });
@@ -475,13 +479,15 @@ function muatDaftarReview() {
   muatDaftarReviewPengajuan();
   muatDaftarReviewPenerimaan();
   muatDaftarReviewPemakaian();
+  muatDaftarReviewAnggaran();
 }
 
 function perbaruiBadgeReview() {
   var totalPengajuan = parseInt(document.getElementById('daftarReview').dataset.jumlah || '0', 10);
   var totalPenerimaan = parseInt(document.getElementById('daftarReviewPenerimaan').dataset.jumlah || '0', 10);
   var totalPemakaian = parseInt(document.getElementById('daftarReviewPemakaian').dataset.jumlah || '0', 10);
-  var total = totalPengajuan + totalPenerimaan + totalPemakaian;
+  var totalAnggaran = parseInt(document.getElementById('daftarReviewAnggaran').dataset.jumlah || '0', 10);
+  var total = totalPengajuan + totalPenerimaan + totalPemakaian + totalAnggaran;
   var badge = document.getElementById('badgeReview');
   if (total > 0) {
     badge.textContent = total;
@@ -645,6 +651,56 @@ function muatDaftarReviewPemakaian() {
       kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
         btn.addEventListener('click', function () {
           prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakLaporanPemakaian', 'idPemakaian', kontainer);
+        });
+      });
+    })
+    .catch(function (err) {
+      kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
+    });
+}
+
+function muatDaftarReviewAnggaran() {
+  var kontainer = document.getElementById('daftarReviewAnggaran');
+  kontainer.innerHTML = '<p class="teks-kosong">Memuat daftar laporan...</p>';
+
+  apiGet('getLaporanAnggaranPending', { initData: appState.initData })
+    .then(function (hasil) {
+      if (!hasil.sukses) {
+        kontainer.innerHTML = '<p class="teks-kosong">' + hasil.pesan + '</p>';
+        return;
+      }
+
+      kontainer.dataset.jumlah = hasil.daftar.length;
+      perbaruiBadgeReview();
+
+      if (hasil.daftar.length === 0) {
+        kontainer.innerHTML = '<p class="teks-kosong">Tidak ada laporan anggaran yang menunggu review.</p>';
+        return;
+      }
+
+      kontainer.innerHTML = '';
+      hasil.daftar.forEach(function (p) {
+        var card = document.createElement('div');
+        card.className = 'review-card';
+
+        card.innerHTML =
+          '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">' + p.jenisLaporan + '</span></div>' +
+          '<div class="review-deskripsi">' + (p.keterangan || '-') + (p.sumberDana ? '<br>Sumber Dana: ' + p.sumberDana : '') + '</div>' +
+          '<div class="review-total">Nominal: ' + formatRupiah(p.nominal) + (p.sisaDana ? ' · Sisa: ' + formatRupiah(p.sisaDana) : '') + '</div>' +
+          (p.rekeningTujuanKlaim ? '<div class="review-deskripsi">Rekening: ' + p.rekeningTujuanKlaim + '</div>' : '') +
+          (p.urlFotoBukti ? '<img src="' + p.urlFotoBukti + '" class="preview-foto">' : '') +
+          '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
+          '<div class="review-actions">' +
+          '<button type="button" class="btn-tolak" data-id="' + p.idLaporan + '" data-aksi="tolak">Tolak</button>' +
+          '<button type="button" class="btn-setujui" data-id="' + p.idLaporan + '" data-aksi="setuju">Setujui</button>' +
+          '</div>';
+
+        kontainer.appendChild(card);
+      });
+
+      kontainer.querySelectorAll('.review-actions button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          prosesKeputusan(btn, btn.dataset.id, btn.dataset.aksi === 'setuju', 'approveTolakLaporanAnggaran', 'idLaporan', kontainer);
         });
       });
     })
@@ -1710,6 +1766,182 @@ document.getElementById('btnKirimPakai').addEventListener('click', function () {
   }).catch(function (err) {
     btn.disabled = false;
     btn.textContent = 'Kirim Laporan Pemakaian';
+    pesanStatus.textContent = 'Gagal: ' + err.message;
+    pesanStatus.className = 'pesan-status error';
+  });
+});
+
+// ---------------------------------------------------------
+// Laporan Anggaran/Klaim
+// ---------------------------------------------------------
+
+var jenisAnggaranTerpilih = 'Pemakaian Dana';
+var fotoAnggaranState = { base64: null, mime: null, url: null };
+
+function muatFormAnggaran() {
+  var select = document.getElementById('selectSumberAnggaran');
+  if (select.dataset.termuat === '1') return;
+
+  var rantai = Promise.resolve();
+
+  rantai = rantai.then(function () {
+    return apiGet('getPengajuanBudgetUntukAnggaran', { initData: appState.initData }).then(function (hasil) {
+      if (!hasil.sukses) return;
+      appState.daftarBudgetAnggaran = hasil.daftar;
+      var sel = document.getElementById('selectBudgetAnggaran');
+      hasil.daftar.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.idPengajuan;
+        opt.textContent = p.idPengajuan + ' — ' + (p.deskripsiUmum || '').substring(0, 30);
+        sel.appendChild(opt);
+      });
+    });
+  });
+
+  if (appState.role === 'Purchasing') {
+    rantai = rantai.then(function () {
+      return apiGet('getPOUntukAnggaran', { initData: appState.initData }).then(function (hasil) {
+        if (!hasil.sukses) return;
+        appState.daftarPOAnggaran = hasil.daftar;
+        var sel = document.getElementById('selectPOAnggaran');
+        hasil.daftar.forEach(function (po) {
+          var opt = document.createElement('option');
+          opt.value = po.idPO;
+          opt.textContent = po.idPO + ' — dari ' + (po.idPengajuanInduk || 'Belanja Mendadak');
+          sel.appendChild(opt);
+        });
+      });
+    });
+  }
+
+  rantai.then(function () { select.dataset.termuat = '1'; })
+    .catch(function (err) { alert('Gagal memuat data: ' + err.message); });
+}
+
+document.getElementById('toggleJenisAnggaran').addEventListener('click', function (e) {
+  var btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#toggleJenisAnggaran button').forEach(function (b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  jenisAnggaranTerpilih = btn.dataset.jenis;
+  document.getElementById('fieldRekeningKlaim').classList.toggle('hidden', jenisAnggaranTerpilih !== 'Klaim Reimburse');
+});
+
+document.getElementById('selectSumberAnggaran').addEventListener('change', function () {
+  var tipe = this.value;
+  document.getElementById('fieldPilihBudget').classList.toggle('hidden', tipe !== 'budget');
+  document.getElementById('fieldPilihPOAnggaran').classList.toggle('hidden', tipe !== 'po');
+});
+
+document.getElementById('btnFotoAnggaran').addEventListener('click', function () {
+  document.getElementById('inputFotoAnggaran').click();
+});
+
+document.getElementById('inputFotoAnggaran').addEventListener('change', function () {
+  var file = this.files[0];
+  if (!file) return;
+
+  var statusEl = document.getElementById('statusFotoAnggaran');
+  statusEl.textContent = 'Memproses foto...';
+  statusEl.className = 'status-upload';
+
+  kompresFoto(file).then(function (hasil) {
+    fotoAnggaranState.base64 = hasil.base64;
+    fotoAnggaranState.mime = hasil.mimeType;
+    fotoAnggaranState.url = null;
+    document.getElementById('previewFotoAnggaran').innerHTML = '<img src="data:' + hasil.mimeType + ';base64,' + hasil.base64 + '" class="preview-foto">';
+    statusEl.textContent = 'Foto siap, akan diupload saat kirim';
+    statusEl.className = 'status-upload sukses';
+  }).catch(function (err) {
+    statusEl.textContent = 'Gagal memproses foto: ' + err.message;
+    statusEl.className = 'status-upload error';
+  });
+});
+
+document.getElementById('btnKirimAnggaran').addEventListener('click', function () {
+  var pesanStatus = document.getElementById('pesanStatusAnggaran');
+  pesanStatus.textContent = '';
+  pesanStatus.className = 'pesan-status';
+
+  var nominal = parseFloat(document.getElementById('inputNominalAnggaran').value) || 0;
+  if (nominal <= 0) {
+    pesanStatus.textContent = 'Nominal wajib diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var rekeningKlaim = document.getElementById('inputRekeningKlaim').value;
+  if (jenisAnggaranTerpilih === 'Klaim Reimburse' && !rekeningKlaim) {
+    pesanStatus.textContent = 'Rekening tujuan klaim wajib diisi untuk Klaim Reimburse.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var tipeSumber = document.getElementById('selectSumberAnggaran').value;
+  var sumber = { tipe: tipeSumber };
+  if (tipeSumber === 'budget') {
+    sumber.idPengajuan = document.getElementById('selectBudgetAnggaran').value;
+    if (!sumber.idPengajuan) {
+      pesanStatus.textContent = 'Pilih pengajuan budget terkait.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+  } else if (tipeSumber === 'po') {
+    sumber.idPO = document.getElementById('selectPOAnggaran').value;
+    if (!sumber.idPO) {
+      pesanStatus.textContent = 'Pilih PO terkait.';
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+  }
+
+  var btn = document.getElementById('btnKirimAnggaran');
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+
+  var rantai = Promise.resolve();
+  if (fotoAnggaranState.base64 && !fotoAnggaranState.url) {
+    rantai = rantai.then(function () {
+      btn.textContent = 'Mengupload foto...';
+      return uploadFotoBerpotongan(fotoAnggaranState.base64, fotoAnggaranState.mime, 'anggaran.jpg')
+        .then(function (url) { fotoAnggaranState.url = url; })
+        .catch(function (err) {
+          document.getElementById('statusFotoAnggaran').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
+          document.getElementById('statusFotoAnggaran').className = 'status-upload error';
+        });
+    });
+  }
+
+  rantai.then(function () {
+    btn.textContent = 'Menyimpan laporan...';
+    return apiGet('submitLaporanAnggaran', {
+      initData: appState.initData,
+      jenisLaporan: jenisAnggaranTerpilih,
+      sumber: JSON.stringify(sumber),
+      sumberDana: document.getElementById('inputSumberDana').value,
+      keterangan: document.getElementById('inputKeteranganAnggaran').value,
+      nominal: nominal,
+      sisaDana: document.getElementById('inputSisaDana').value || '',
+      rekeningTujuanKlaim: rekeningKlaim,
+      urlFotoBukti: fotoAnggaranState.url || ''
+    });
+  }).then(function (hasil) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Anggaran';
+    if (!hasil.sukses) {
+      pesanStatus.textContent = hasil.pesan;
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    var infoStatus = hasil.statusApproval === 'Disetujui (Otomatis via PO)'
+      ? ' (otomatis disetujui via PO)'
+      : '';
+    document.getElementById('idPengajuanSukses').textContent = 'ID Laporan: ' + hasil.idLaporan + infoStatus;
+    document.getElementById('layarUtama').classList.add('hidden');
+    document.getElementById('layarSukses').classList.remove('hidden');
+  }).catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Anggaran';
     pesanStatus.textContent = 'Gagal: ' + err.message;
     pesanStatus.className = 'pesan-status error';
   });
