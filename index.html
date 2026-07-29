@@ -23,6 +23,7 @@
       <button type="button" class="tab-btn active" data-tab="ajukan">Ajukan</button>
       <button type="button" class="tab-btn" data-tab="terima">Terima</button>
       <button type="button" class="tab-btn" data-tab="pakai">Pakai</button>
+      <button type="button" class="tab-btn" data-tab="anggaran">Anggaran</button>
       <button type="button" class="tab-btn hidden" id="tabPO" data-tab="po">PO</button>
       <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
     </div>
@@ -73,6 +74,65 @@
       <button type="button" id="btnKirim">Kirim Pengajuan</button>
       <div class="pesan-status" id="pesanStatus"></div>
     </footer>
+    </div>
+
+    <div id="viewAnggaran" class="hidden">
+      <main>
+        <div class="section-label">Jenis Laporan</div>
+        <div class="toggle-group" id="toggleJenisAnggaran">
+          <button type="button" class="active" data-jenis="Pemakaian Dana">Pemakaian Dana</button>
+          <button type="button" data-jenis="Klaim Reimburse">Klaim Reimburse</button>
+        </div>
+
+        <div class="section-label">Sumber</div>
+        <div class="field">
+          <select id="selectSumberAnggaran">
+            <option value="tanpa">Tanpa Keterkaitan</option>
+            <option value="budget">Terkait Pengajuan Budget</option>
+            <option value="po" id="opsiSumberPO" class="hidden">Terkait PO Saya</option>
+          </select>
+        </div>
+        <div class="field hidden" id="fieldPilihBudget">
+          <select id="selectBudgetAnggaran"><option value="">-- Pilih pengajuan budget --</option></select>
+        </div>
+        <div class="field hidden" id="fieldPilihPOAnggaran">
+          <select id="selectPOAnggaran"><option value="">-- Pilih PO --</option></select>
+        </div>
+
+        <div class="section-label">Detail</div>
+        <div class="field">
+          <label for="inputSumberDana">Sumber Dana</label>
+          <input type="text" id="inputSumberDana" placeholder="Contoh: Kas Purchasing, Dana Pribadi">
+        </div>
+        <div class="field">
+          <label for="inputKeteranganAnggaran">Keterangan</label>
+          <textarea id="inputKeteranganAnggaran" placeholder="Rincian penggunaan dana"></textarea>
+        </div>
+        <div class="field">
+          <label for="inputNominalAnggaran">Nominal (Rp)</label>
+          <input type="number" min="0" id="inputNominalAnggaran" placeholder="Contoh: 500000">
+        </div>
+        <div class="field">
+          <label for="inputSisaDana">Sisa Dana (opsional)</label>
+          <input type="number" min="0" id="inputSisaDana" placeholder="Diisi manual kalau ada sisa">
+        </div>
+        <div class="field hidden" id="fieldRekeningKlaim">
+          <label for="inputRekeningKlaim">Rekening Tujuan Klaim</label>
+          <input type="text" id="inputRekeningKlaim" placeholder="Nomor rekening & nama bank">
+        </div>
+
+        <div class="section-label">Bukti Foto (Opsional)</div>
+        <div class="item-card">
+          <div id="previewFotoAnggaran"></div>
+          <button type="button" class="btn-ambil-foto" id="btnFotoAnggaran">📷 Ambil/Pilih Foto</button>
+          <input type="file" accept="image/*" capture="environment" class="hidden" id="inputFotoAnggaran">
+          <div class="status-upload" id="statusFotoAnggaran"></div>
+        </div>
+      </main>
+      <footer class="submit-bar">
+        <button type="button" id="btnKirimAnggaran">Kirim Laporan Anggaran</button>
+        <div class="pesan-status" id="pesanStatusAnggaran"></div>
+      </footer>
     </div>
 
     <div id="viewPo" class="hidden">
@@ -129,6 +189,10 @@
         </div>
         <div class="section-label">Laporan Pemakaian Menunggu Persetujuan</div>
         <div id="daftarReviewPemakaian">
+          <p class="teks-kosong">Memuat...</p>
+        </div>
+        <div class="section-label">Laporan Anggaran Menunggu Persetujuan</div>
+        <div id="daftarReviewAnggaran">
           <p class="teks-kosong">Memuat...</p>
         </div>
       </main>
