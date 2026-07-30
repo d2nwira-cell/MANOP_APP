@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxpn79eiKIdSqul6Nxyr0JCXTd26cizRLKMM4MYkiUmwsedx8U7NR1Yu-S5n6e9kfbUdQ/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzX10_Yxp74hsmeZJFddOwp72sTbPHjGOiWNs1kMionrvgRc_ntI2CX9MhidIOmm5jLEA/exec';
 
 // =========================================================
 
@@ -683,9 +683,14 @@ function muatDaftarReviewAnggaran() {
         var card = document.createElement('div');
         card.className = 'review-card';
 
+        var daftarItemHtml = (p.items || []).map(function (it) {
+          return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + ' × ' + formatRupiah(it.hargaSatuan) + ' = ' + formatRupiah(it.totalHarga) + '</li>';
+        }).join('');
+
         card.innerHTML =
           '<div class="review-top"><span class="review-nama">' + p.namaPelapor + '</span><span class="review-jenis">' + p.jenisLaporan + '</span></div>' +
           '<div class="review-deskripsi">' + (p.keterangan || '-') + (p.sumberDana ? '<br>Sumber Dana: ' + p.sumberDana : '') + '</div>' +
+          (daftarItemHtml ? '<ul class="review-items">' + daftarItemHtml + '</ul>' : '') +
           '<div class="review-total">Nominal: ' + formatRupiah(p.nominal) + (p.sisaDana ? ' · Sisa: ' + formatRupiah(p.sisaDana) : '') + '</div>' +
           (p.rekeningTujuanKlaim ? '<div class="review-deskripsi">Rekening: ' + p.rekeningTujuanKlaim + '</div>' : '') +
           (p.urlFotoBukti ? '<img src="' + p.urlFotoBukti + '" class="preview-foto">' : '') +
@@ -1451,7 +1456,12 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
     if (tujuanAktif === 'supplier') {
       var supplier = (appState.daftarSupplier || []).filter(function (s) { return s.idSupplier === document.getElementById('selectSupplier').value; })[0];
       if (supplier && supplier.kontakSupplier) {
-        var teksWA = bangunTeksWhatsAppPO(hasil.idPO, idPengajuan, itemsPOTerkirim, catatanPO);
+        var pengajuanSumber = (appState.daftarPengajuanPO || []).filter(function (p) { return p.idPengajuan === idPengajuan; })[0];
+        var teksWA = bangunTeksWhatsAppPO(
+          hasil.idPO, idPengajuan, itemsPOTerkirim, catatanPO,
+          pengajuanSumber ? pengajuanSumber.namaLokasiTujuan : '',
+          pengajuanSumber ? pengajuanSumber.tanggalPemakaian : ''
+        );
         var linkWA = bangunLinkWhatsApp(supplier.kontakSupplier, teksWA);
         pesanStatus.innerHTML = '✅ PO berhasil dibuat: ' + hasil.idPO +
           '<br><a href="' + linkWA + '" target="_blank" class="tombol-wa">📲 Kirim ke WhatsApp Supplier</a>';
@@ -1486,17 +1496,21 @@ document.getElementById('btnBuatPO').addEventListener('click', function () {
  * Susun teks ringkasan PO yang enak dibaca untuk dikirim ke Supplier
  * lewat WhatsApp.
  */
-function bangunTeksWhatsAppPO(idPO, idPengajuan, items, catatan) {
+function bangunTeksWhatsAppPO(idPO, idPengajuan, items, catatan, namaLokasiTujuan, tanggalPemakaian) {
   var daftarBaris = items.map(function (it) {
     return '- ' + it.namaBarang + ' : ' + it.qty + ' ' + it.satuan;
   }).join('\n');
 
+  var pembuka = (namaLokasiTujuan && tanggalPemakaian)
+    ? 'Harap segera dikirim barang-barang berikut untuk keperluan di *' + namaLokasiTujuan + '* pada tanggal *' + formatTanggalTampil(tanggalPemakaian) + '*:'
+    : 'Harap segera dikirim barang-barang berikut:';
+
   return '📋 *Purchase Order*\n' +
     'ID: ' + idPO + '\n' +
     'Ref. Pengajuan: ' + (idPengajuan || 'Belanja Mendadak (tanpa pengajuan)') + '\n\n' +
-    'Item yang dibutuhkan:\n' + daftarBaris +
+    pembuka + '\n' + daftarBaris +
     (catatan ? '\n\nCatatan: ' + catatan : '') +
-    '\n\nMohon segera diproses. Terima kasih.';
+    '\n\nMohon konfirmasi setelah menerima pesan ini. Terima kasih.';
 }
 
 /**
@@ -1777,6 +1791,99 @@ document.getElementById('btnKirimPakai').addEventListener('click', function () {
 
 var jenisAnggaranTerpilih = 'Pemakaian Dana';
 var fotoAnggaranState = { base64: null, mime: null, url: null };
+var itemsAnggaran = [];
+
+function tambahItemAnggaran() {
+  itemsAnggaran.push({ idBarang: '', namaBarang: '', qty: 1, satuan: '', hargaSatuan: 0 });
+  renderItemAnggaran();
+}
+
+document.getElementById('btnTambahItemAnggaran').addEventListener('click', tambahItemAnggaran);
+
+function renderItemAnggaran() {
+  var kontainer = document.getElementById('daftarItemAnggaran');
+  kontainer.innerHTML = '';
+
+  itemsAnggaran.forEach(function (item, index) {
+    var card = document.createElement('div');
+    card.className = 'item-card';
+
+    card.innerHTML =
+      '<div class="item-card-top"><span>Item ' + (index + 1) + '</span>' +
+      '<button type="button" class="remove" data-hapus-ag="' + index + '">Hapus</button></div>' +
+      '<div class="field cari-barang-wrap">' +
+      '<input type="text" autocomplete="off" placeholder="Cari atau ketik nama barang/jasa..." class="input-cari-barang-ag" data-idx-ag="' + index + '" value="' + (item.namaBarang || '').replace(/"/g, '&quot;') + '">' +
+      '<div class="dropdown-barang hidden" data-idx-ag-dd="' + index + '"></div>' +
+      '</div>' +
+      '<div class="item-row">' +
+      '<input type="number" min="0" placeholder="Jumlah" data-idx-ag="' + index + '" data-key-ag="qty" value="' + item.qty + '">' +
+      '<input type="text" placeholder="Satuan" data-idx-ag="' + index + '" data-key-ag="satuan" value="' + item.satuan + '">' +
+      '</div>' +
+      '<div class="field"><input type="number" min="0" placeholder="Harga satuan (Rp)" data-idx-ag="' + index + '" data-key-ag="hargaSatuan" value="' + item.hargaSatuan + '"></div>';
+
+    kontainer.appendChild(card);
+  });
+
+  kontainer.querySelectorAll('[data-key-ag]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      var idx = parseInt(el.dataset.idxAg, 10);
+      var key = el.dataset.keyAg;
+      itemsAnggaran[idx][key] = (key === 'qty' || key === 'hargaSatuan') ? (parseFloat(el.value) || 0) : el.value;
+    });
+  });
+
+  kontainer.querySelectorAll('[data-hapus-ag]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      itemsAnggaran.splice(parseInt(el.dataset.hapusAg, 10), 1);
+      renderItemAnggaran();
+    });
+  });
+
+  kontainer.querySelectorAll('.input-cari-barang-ag').forEach(function (inputEl) {
+    var idx = parseInt(inputEl.dataset.idxAg, 10);
+    var dropdownEl = kontainer.querySelector('.dropdown-barang[data-idx-ag-dd="' + idx + '"]');
+
+    inputEl.addEventListener('input', function () {
+      itemsAnggaran[idx].idBarang = '';
+      itemsAnggaran[idx].namaBarang = inputEl.value;
+      tampilkanSaranBarangAnggaran(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('focus', function () {
+      tampilkanSaranBarangAnggaran(inputEl.value, dropdownEl, idx, inputEl);
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { dropdownEl.classList.add('hidden'); }, 150);
+    });
+  });
+}
+
+function tampilkanSaranBarangAnggaran(kataKunci, dropdownEl, idx, inputEl) {
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var hasil = kata
+    ? appState.masterBarang.filter(function (b) { return b.namaBarang.toLowerCase().indexOf(kata) !== -1; })
+    : appState.masterBarang;
+  hasil = hasil.slice(0, 20);
+
+  dropdownEl.innerHTML = hasil.length === 0
+    ? '<div class="teks-kosong-dropdown">Tidak ditemukan -- akan disimpan sebagai barang custom</div>'
+    : hasil.map(function (b) { return '<div class="opsi-barang" data-pilih-idbarang="' + b.idBarang + '">' + b.namaBarang + '</div>'; }).join('');
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-idbarang]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var barang = appState.masterBarang.filter(function (b) { return b.idBarang === opsiEl.dataset.pilihIdbarang; })[0];
+      if (!barang) return;
+      itemsAnggaran[idx].idBarang = barang.idBarang;
+      itemsAnggaran[idx].namaBarang = barang.namaBarang;
+      itemsAnggaran[idx].satuan = barang.satuan;
+      itemsAnggaran[idx].hargaSatuan = barang.hargaBarang || 0;
+      inputEl.value = barang.namaBarang;
+      dropdownEl.classList.add('hidden');
+      renderItemAnggaran();
+    });
+  });
+}
 
 function muatFormAnggaran() {
   var select = document.getElementById('selectSumberAnggaran');
@@ -1923,7 +2030,8 @@ document.getElementById('btnKirimAnggaran').addEventListener('click', function (
       nominal: nominal,
       sisaDana: document.getElementById('inputSisaDana').value || '',
       rekeningTujuanKlaim: rekeningKlaim,
-      urlFotoBukti: fotoAnggaranState.url || ''
+      urlFotoBukti: fotoAnggaranState.url || '',
+      itemsAnggaran: JSON.stringify(itemsAnggaran.filter(function (it) { return it.namaBarang; }))
     });
   }).then(function (hasil) {
     btn.disabled = false;
