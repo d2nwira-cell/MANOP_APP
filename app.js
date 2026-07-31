@@ -41,12 +41,12 @@ function panggilApi(action, paramsTambahan) {
     var query = new URLSearchParams(params);
     var src = API_BASE_URL + '?' + query.toString();
 
-    // 30 detik (bukan 15) -- Apps Script kadang butuh waktu lebih lama untuk
+    // 60 detik (bukan 15) -- Apps Script kadang butuh waktu lebih lama untuk
     // "bangun" (cold start) kalau baru pertama kali dipanggil setelah lama tidak aktif.
     var timeoutId = setTimeout(function () {
       bersihkan();
       reject(new Error('Waktu tunggu habis -- server tidak merespon.'));
-    }, 30000);
+    }, 60000);
 
     function bersihkan() {
       clearTimeout(timeoutId);
