@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzX10_Yxp74hsmeZJFddOwp72sTbPHjGOiWNs1kMionrvgRc_ntI2CX9MhidIOmm5jLEA/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzFucKBPaEsyTBbQ2XlFVOedZEjL0iE-2BFl7y8d0qe0kfiMHDebAY1XtgsK27d91Unvw/exec';
 
 // =========================================================
 
@@ -41,12 +41,12 @@ function panggilApi(action, paramsTambahan) {
     var query = new URLSearchParams(params);
     var src = API_BASE_URL + '?' + query.toString();
 
-    // 60 detik (bukan 15) -- Apps Script kadang butuh waktu lebih lama untuk
+    // 30 detik (bukan 15) -- Apps Script kadang butuh waktu lebih lama untuk
     // "bangun" (cold start) kalau baru pertama kali dipanggil setelah lama tidak aktif.
     var timeoutId = setTimeout(function () {
       bersihkan();
       reject(new Error('Waktu tunggu habis -- server tidak merespon.'));
-    }, 60000);
+    }, 30000);
 
     function bersihkan() {
       clearTimeout(timeoutId);
@@ -444,8 +444,8 @@ mulai();
 // Tab Bar (Ajukan / Terima / Review)
 // ---------------------------------------------------------
 
-var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPakai', 'viewAnggaran', 'viewPo', 'viewReview'];
-var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', pakai: 'Laporan Pemakaian', anggaran: 'Laporan Anggaran', po: 'Purchase Order', review: 'Review' };
+var SEMUA_VIEW = ['viewAjukan', 'viewTerima', 'viewPakai', 'viewAnggaran', 'viewKegiatan', 'viewPo', 'viewReview'];
+var JUDUL_PER_TAB = { ajukan: 'Pengajuan Baru', terima: 'Laporan Penerimaan', pakai: 'Laporan Pemakaian', anggaran: 'Laporan Anggaran', kegiatan: 'Laporan Kegiatan', po: 'Purchase Order', review: 'Review' };
 
 document.getElementById('tabBar').addEventListener('click', function (e) {
   var btn = e.target.closest('.tab-btn');
@@ -463,6 +463,7 @@ document.getElementById('tabBar').addEventListener('click', function (e) {
   if (tab === 'terima') muatPengajuanUntukPenerimaan();
   if (tab === 'pakai') muatFormPakai();
   if (tab === 'anggaran') muatFormAnggaran();
+  if (tab === 'kegiatan') muatFormKegiatan();
   if (tab === 'review') muatDaftarReview();
   if (tab === 'po') muatTabPO();
 });
@@ -2050,6 +2051,145 @@ document.getElementById('btnKirimAnggaran').addEventListener('click', function (
   }).catch(function (err) {
     btn.disabled = false;
     btn.textContent = 'Kirim Laporan Anggaran';
+    pesanStatus.textContent = 'Gagal: ' + err.message;
+    pesanStatus.className = 'pesan-status error';
+  });
+});
+
+// ---------------------------------------------------------
+// Laporan Kegiatan
+// ---------------------------------------------------------
+
+var fotoKegiatanState = { base64: null, mime: null, url: null };
+var proyekTerpilih = '';
+
+function muatFormKegiatan() {
+  var field = document.getElementById('fieldProyek');
+  if (field.dataset.termuat === '1') return;
+
+  apiGet('getDaftarProyek', { initData: appState.initData }).then(function (hasil) {
+    if (!hasil.sukses) return;
+    appState.daftarProyek = hasil.daftar;
+    // Field Proyek cuma relevan untuk kategori usaha Workshop & Properti
+    if (hasil.kategoriLokasi === 'Workshop' || hasil.kategoriLokasi === 'Properti') {
+      field.classList.remove('hidden');
+    }
+    field.dataset.termuat = '1';
+  }).catch(function (err) { alert('Gagal memuat form: ' + err.message); });
+}
+
+document.getElementById('inputProyek').addEventListener('input', function () {
+  proyekTerpilih = this.value;
+  tampilkanSaranProyek(this.value);
+});
+document.getElementById('inputProyek').addEventListener('focus', function () {
+  tampilkanSaranProyek(this.value);
+});
+document.getElementById('inputProyek').addEventListener('blur', function () {
+  setTimeout(function () { document.getElementById('dropdownProyek').classList.add('hidden'); }, 150);
+});
+
+function tampilkanSaranProyek(kataKunci) {
+  var dropdownEl = document.getElementById('dropdownProyek');
+  var kata = (kataKunci || '').toLowerCase().trim();
+  var daftar = appState.daftarProyek || [];
+  var hasil = kata ? daftar.filter(function (p) { return p.toLowerCase().indexOf(kata) !== -1; }) : daftar;
+  hasil = hasil.slice(0, 20);
+
+  if (hasil.length === 0) {
+    dropdownEl.classList.add('hidden');
+    return;
+  }
+
+  dropdownEl.innerHTML = hasil.map(function (p) { return '<div class="opsi-barang" data-pilih-proyek="' + p.replace(/"/g, '&quot;') + '">' + p + '</div>'; }).join('');
+  dropdownEl.classList.remove('hidden');
+
+  dropdownEl.querySelectorAll('[data-pilih-proyek]').forEach(function (opsiEl) {
+    opsiEl.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      proyekTerpilih = opsiEl.dataset.pilihProyek;
+      document.getElementById('inputProyek').value = proyekTerpilih;
+      dropdownEl.classList.add('hidden');
+    });
+  });
+}
+
+document.getElementById('btnFotoKegiatan').addEventListener('click', function () {
+  document.getElementById('inputFotoKegiatan').click();
+});
+
+document.getElementById('inputFotoKegiatan').addEventListener('change', function () {
+  var file = this.files[0];
+  if (!file) return;
+
+  var statusEl = document.getElementById('statusFotoKegiatan');
+  statusEl.textContent = 'Memproses foto...';
+  statusEl.className = 'status-upload';
+
+  kompresFoto(file).then(function (hasil) {
+    fotoKegiatanState.base64 = hasil.base64;
+    fotoKegiatanState.mime = hasil.mimeType;
+    fotoKegiatanState.url = null;
+    document.getElementById('previewFotoKegiatan').innerHTML = '<img src="data:' + hasil.mimeType + ';base64,' + hasil.base64 + '" class="preview-foto">';
+    statusEl.textContent = 'Foto siap, akan diupload saat kirim';
+    statusEl.className = 'status-upload sukses';
+  }).catch(function (err) {
+    statusEl.textContent = 'Gagal memproses foto: ' + err.message;
+    statusEl.className = 'status-upload error';
+  });
+});
+
+document.getElementById('btnKirimKegiatan').addEventListener('click', function () {
+  var pesanStatus = document.getElementById('pesanStatusKegiatan');
+  pesanStatus.textContent = '';
+  pesanStatus.className = 'pesan-status';
+
+  var aktivitas = document.getElementById('inputAktivitas').value;
+  if (!aktivitas) {
+    pesanStatus.textContent = 'Deskripsi aktivitas wajib diisi.';
+    pesanStatus.className = 'pesan-status error';
+    return;
+  }
+
+  var btn = document.getElementById('btnKirimKegiatan');
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+
+  var rantai = Promise.resolve();
+  if (fotoKegiatanState.base64 && !fotoKegiatanState.url) {
+    rantai = rantai.then(function () {
+      btn.textContent = 'Mengupload foto...';
+      return uploadFotoBerpotongan(fotoKegiatanState.base64, fotoKegiatanState.mime, 'kegiatan.jpg')
+        .then(function (url) { fotoKegiatanState.url = url; })
+        .catch(function (err) {
+          document.getElementById('statusFotoKegiatan').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
+          document.getElementById('statusFotoKegiatan').className = 'status-upload error';
+        });
+    });
+  }
+
+  rantai.then(function () {
+    btn.textContent = 'Menyimpan laporan...';
+    return apiGet('submitLaporanKegiatan', {
+      initData: appState.initData,
+      aktivitas: aktivitas,
+      proyek: proyekTerpilih,
+      urlFoto: fotoKegiatanState.url || ''
+    });
+  }).then(function (hasil) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Kegiatan';
+    if (!hasil.sukses) {
+      pesanStatus.textContent = hasil.pesan;
+      pesanStatus.className = 'pesan-status error';
+      return;
+    }
+    document.getElementById('idPengajuanSukses').textContent = 'ID Laporan: ' + hasil.idKegiatan;
+    document.getElementById('layarUtama').classList.add('hidden');
+    document.getElementById('layarSukses').classList.remove('hidden');
+  }).catch(function (err) {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Laporan Kegiatan';
     pesanStatus.textContent = 'Gagal: ' + err.message;
     pesanStatus.className = 'pesan-status error';
   });
