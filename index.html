@@ -24,6 +24,7 @@
       <button type="button" class="tab-btn" data-tab="terima">Terima</button>
       <button type="button" class="tab-btn" data-tab="pakai">Pakai</button>
       <button type="button" class="tab-btn" data-tab="anggaran">Anggaran</button>
+      <button type="button" class="tab-btn" data-tab="kegiatan">Kegiatan</button>
       <button type="button" class="tab-btn hidden" id="tabPO" data-tab="po">PO</button>
       <button type="button" class="tab-btn hidden" id="tabReview" data-tab="review">Review <span id="badgeReview" class="badge hidden">0</span></button>
     </div>
@@ -136,6 +137,34 @@
       <footer class="submit-bar">
         <button type="button" id="btnKirimAnggaran">Kirim Laporan Anggaran</button>
         <div class="pesan-status" id="pesanStatusAnggaran"></div>
+      </footer>
+    </div>
+
+    <div id="viewKegiatan" class="hidden">
+      <main>
+        <div class="field hidden" id="fieldProyek">
+          <label for="inputProyek">Proyek</label>
+          <div class="cari-barang-wrap">
+            <input type="text" autocomplete="off" id="inputProyek" placeholder="Ketik nama proyek...">
+            <div class="dropdown-barang hidden" id="dropdownProyek"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="inputAktivitas">Deskripsi Aktivitas</label>
+          <textarea id="inputAktivitas" placeholder="Ceritakan aktivitas/pekerjaan yang dilakukan"></textarea>
+        </div>
+
+        <div class="section-label">Foto (Opsional)</div>
+        <div class="item-card">
+          <div id="previewFotoKegiatan"></div>
+          <button type="button" class="btn-ambil-foto" id="btnFotoKegiatan">📷 Ambil/Pilih Foto</button>
+          <input type="file" accept="image/*" capture="environment" class="hidden" id="inputFotoKegiatan">
+          <div class="status-upload" id="statusFotoKegiatan"></div>
+        </div>
+      </main>
+      <footer class="submit-bar">
+        <button type="button" id="btnKirimKegiatan">Kirim Laporan Kegiatan</button>
+        <div class="pesan-status" id="pesanStatusKegiatan"></div>
       </footer>
     </div>
 
