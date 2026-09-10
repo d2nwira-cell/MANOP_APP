@@ -2,7 +2,7 @@
 // KONFIGURASI -- WAJIB DIISI sebelum dipakai
 // =========================================================
 // Tempel URL deployment Apps Script Anda di sini (yang berakhiran /exec)
-var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwPRCwCIwmByYgI7xsR_LDltiXFcy-P9gojYNn36BTerVbLb3_VNtkRJO0jfzBynsKqSg/exec';
+var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwuMWD11WZmD-SNEk__q4xQPd-9TqppwGrdp_KWNjMRTHUF_VTW0NLw47sYqzDTFLBk/exec';
 
 // =========================================================
 
@@ -694,7 +694,7 @@ function muatDaftarReviewAnggaran() {
           (daftarItemHtml ? '<ul class="review-items">' + daftarItemHtml + '</ul>' : '') +
           '<div class="review-total">Nominal: ' + formatRupiah(p.nominal) + (p.sisaDana ? ' · Sisa: ' + formatRupiah(p.sisaDana) : '') + '</div>' +
           (p.rekeningTujuanKlaim ? '<div class="review-deskripsi">Rekening: ' + p.rekeningTujuanKlaim + '</div>' : '') +
-          (p.urlFotoBukti ? '<img src="' + p.urlFotoBukti + '" class="preview-foto">' : '') +
+          (p.daftarFotoBukti || []).map(function (url) { return '<img src="' + url + '" class="preview-foto">'; }).join('') +
           '<textarea class="catatan-review" placeholder="Catatan (opsional untuk setuju, wajib untuk tolak)"></textarea>' +
           '<div class="review-actions">' +
           '<button type="button" class="btn-tolak" data-id="' + p.idLaporan + '" data-aksi="tolak">Tolak</button>' +
@@ -1168,14 +1168,33 @@ function muatRiwayatPO() {
         return '<li>' + it.namaBarang + ' — ' + it.qty + ' ' + it.satuan + '</li>';
       }).join('');
 
+      var tombolKirimUlangWA = po.kontakSupplier
+        ? '<a href="#" class="tombol-wa tombol-kirim-ulang-wa" data-idx-po-riwayat="' + po.idPO + '">📲 Kirim Ulang ke WhatsApp</a>'
+        : '';
+
       card.innerHTML =
         '<div class="review-top"><span class="review-nama">' + po.idPO + '</span><span class="review-jenis">' + po.statusPO + '</span></div>' +
         '<div class="review-deskripsi">' + po.namaTujuan + '<br>' +
         (po.idPengajuanInduk ? 'Dari Pengajuan: ' + po.idPengajuanInduk : '🛒 Belanja Mendadak') +
         (po.catatanManajer ? '<br>Catatan: ' + po.catatanManajer : '') + '</div>' +
-        '<ul class="review-items">' + daftarItemHtml + '</ul>';
+        '<ul class="review-items">' + daftarItemHtml + '</ul>' +
+        tombolKirimUlangWA;
 
       kontainer.appendChild(card);
+    });
+
+    kontainer.querySelectorAll('.tombol-kirim-ulang-wa').forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        var idPO = el.dataset.idxPoRiwayat;
+        var po = hasil.daftar.filter(function (p) { return p.idPO === idPO; })[0];
+        if (!po) return;
+        var teksWA = bangunTeksWhatsAppPO(
+          po.idPO, po.idPengajuanInduk, po.items, po.catatanManajer,
+          po.namaLokasiTujuanAsal, po.tanggalPemakaianAsal
+        );
+        window.open(bangunLinkWhatsApp(po.kontakSupplier, teksWA), '_blank');
+      });
     });
   }).catch(function (err) {
     kontainer.innerHTML = '<p class="teks-kosong">Gagal memuat: ' + err.message + '</p>';
@@ -1791,7 +1810,6 @@ document.getElementById('btnKirimPakai').addEventListener('click', function () {
 // ---------------------------------------------------------
 
 var jenisAnggaranTerpilih = 'Pemakaian Dana';
-var fotoAnggaranState = { base64: null, mime: null, url: null };
 var itemsAnggaran = [];
 
 function tambahItemAnggaran() {
@@ -1941,30 +1959,68 @@ document.getElementById('selectSumberAnggaran').addEventListener('change', funct
   document.getElementById('fieldPilihPOAnggaran').classList.toggle('hidden', tipe !== 'po');
 });
 
-document.getElementById('btnFotoAnggaran').addEventListener('click', function () {
-  document.getElementById('inputFotoAnggaran').click();
+var fotoAnggaranList = []; // array of { base64, mime, url, status: {tipe, teks} }
+
+document.getElementById('btnTambahFotoAnggaran').addEventListener('click', function () {
+  fotoAnggaranList.push({ base64: null, mime: null, url: null, status: null });
+  renderFotoAnggaran();
 });
 
-document.getElementById('inputFotoAnggaran').addEventListener('change', function () {
-  var file = this.files[0];
-  if (!file) return;
+function renderFotoAnggaran() {
+  var kontainer = document.getElementById('daftarFotoAnggaran');
+  kontainer.innerHTML = '';
 
-  var statusEl = document.getElementById('statusFotoAnggaran');
-  statusEl.textContent = 'Memproses foto...';
-  statusEl.className = 'status-upload';
+  fotoAnggaranList.forEach(function (foto, index) {
+    var card = document.createElement('div');
+    card.className = 'item-card';
 
-  kompresFoto(file).then(function (hasil) {
-    fotoAnggaranState.base64 = hasil.base64;
-    fotoAnggaranState.mime = hasil.mimeType;
-    fotoAnggaranState.url = null;
-    document.getElementById('previewFotoAnggaran').innerHTML = '<img src="data:' + hasil.mimeType + ';base64,' + hasil.base64 + '" class="preview-foto">';
-    statusEl.textContent = 'Foto siap, akan diupload saat kirim';
-    statusEl.className = 'status-upload sukses';
-  }).catch(function (err) {
-    statusEl.textContent = 'Gagal memproses foto: ' + err.message;
-    statusEl.className = 'status-upload error';
+    card.innerHTML =
+      '<div class="item-card-top"><span>Foto ' + (index + 1) + '</span>' +
+      '<button type="button" class="remove" data-hapus-foto-ag="' + index + '">Hapus</button></div>' +
+      (foto.base64 ? '<img src="data:' + foto.mime + ';base64,' + foto.base64 + '" class="preview-foto">' : '') +
+      '<button type="button" class="btn-ambil-foto" data-idx-foto-ag="' + index + '">📷 ' + (foto.base64 ? 'Ganti Foto' : 'Ambil/Pilih Foto') + '</button>' +
+      '<input type="file" accept="image/*" capture="environment" class="hidden input-file-foto-ag" data-idx-foto-ag-input="' + index + '">' +
+      (foto.status ? '<div class="status-upload ' + foto.status.tipe + '">' + foto.status.teks + '</div>' : '');
+
+    kontainer.appendChild(card);
   });
-});
+
+  kontainer.querySelectorAll('[data-hapus-foto-ag]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      fotoAnggaranList.splice(parseInt(el.dataset.hapusFotoAg, 10), 1);
+      renderFotoAnggaran();
+    });
+  });
+
+  kontainer.querySelectorAll('.btn-ambil-foto').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = btn.dataset.idxFotoAg;
+      kontainer.querySelector('.input-file-foto-ag[data-idx-foto-ag-input="' + idx + '"]').click();
+    });
+  });
+
+  kontainer.querySelectorAll('.input-file-foto-ag').forEach(function (inputEl) {
+    inputEl.addEventListener('change', function () {
+      var idx = parseInt(inputEl.dataset.idxFotoAgInput, 10);
+      var file = inputEl.files[0];
+      if (!file) return;
+
+      fotoAnggaranList[idx].status = { tipe: '', teks: 'Memproses foto...' };
+      renderFotoAnggaran();
+
+      kompresFoto(file).then(function (hasil) {
+        fotoAnggaranList[idx].base64 = hasil.base64;
+        fotoAnggaranList[idx].mime = hasil.mimeType;
+        fotoAnggaranList[idx].url = null;
+        fotoAnggaranList[idx].status = { tipe: 'sukses', teks: 'Foto siap, akan diupload saat kirim' };
+        renderFotoAnggaran();
+      }).catch(function (err) {
+        fotoAnggaranList[idx].status = { tipe: 'error', teks: 'Gagal memproses foto: ' + err.message };
+        renderFotoAnggaran();
+      });
+    });
+  });
+}
 
 document.getElementById('btnKirimAnggaran').addEventListener('click', function () {
   var pesanStatus = document.getElementById('pesanStatusAnggaran');
@@ -2008,20 +2064,23 @@ document.getElementById('btnKirimAnggaran').addEventListener('click', function (
   btn.textContent = 'Mengirim...';
 
   var rantai = Promise.resolve();
-  if (fotoAnggaranState.base64 && !fotoAnggaranState.url) {
-    rantai = rantai.then(function () {
-      btn.textContent = 'Mengupload foto...';
-      return uploadFotoBerpotongan(fotoAnggaranState.base64, fotoAnggaranState.mime, 'anggaran.jpg')
-        .then(function (url) { fotoAnggaranState.url = url; })
-        .catch(function (err) {
-          document.getElementById('statusFotoAnggaran').textContent = 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message;
-          document.getElementById('statusFotoAnggaran').className = 'status-upload error';
-        });
-    });
-  }
+  fotoAnggaranList.forEach(function (foto, idx) {
+    if (foto.base64 && !foto.url) {
+      rantai = rantai.then(function () {
+        btn.textContent = 'Mengupload foto ' + (idx + 1) + '...';
+        return uploadFotoBerpotongan(foto.base64, foto.mime, 'anggaran_' + (idx + 1) + '.jpg')
+          .then(function (url) { foto.url = url; })
+          .catch(function (err) {
+            foto.status = { tipe: 'error', teks: 'Foto gagal diupload, laporan tetap dikirim tanpa foto ini: ' + err.message };
+            renderFotoAnggaran();
+          });
+      });
+    }
+  });
 
   rantai.then(function () {
     btn.textContent = 'Menyimpan laporan...';
+    var urlFotoBuktiList = fotoAnggaranList.filter(function (f) { return f.url; }).map(function (f) { return f.url; });
     return apiGet('submitLaporanAnggaran', {
       initData: appState.initData,
       jenisLaporan: jenisAnggaranTerpilih,
@@ -2031,7 +2090,7 @@ document.getElementById('btnKirimAnggaran').addEventListener('click', function (
       nominal: nominal,
       sisaDana: document.getElementById('inputSisaDana').value || '',
       rekeningTujuanKlaim: rekeningKlaim,
-      urlFotoBukti: fotoAnggaranState.url || '',
+      urlFotoBuktiList: JSON.stringify(urlFotoBuktiList),
       itemsAnggaran: JSON.stringify(itemsAnggaran.filter(function (it) { return it.namaBarang; }))
     });
   }).then(function (hasil) {
