@@ -221,7 +221,7 @@ footer.submit-bar button:disabled { opacity: 0.5; }
 }
 .review-card .review-nama { font-weight: 700; font-size: 15px; }
 .review-card .review-jenis { font-size: 12px; color: var(--hint); }
-.review-card .review-deskripsi { font-size: 14px; margin: 6px 0; }
+.review-card .review-deskripsi { font-size: 14px; margin: 6px 0; white-space: pre-wrap; }
 .review-card .review-items {
   font-size: 13px;
   color: var(--hint);
